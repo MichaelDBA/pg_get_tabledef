@@ -102,7 +102,7 @@ Date	     Description
       IF in_fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
           continue;
       END IF;
-      RAISE NOTICE 'table_ddl=%   constraint_def=%',v_table_ddl, v_constraintrec.constraint_definition;
+
       v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
         || 'CONSTRAINT' || ' '
         || v_constraintrec.constraint_name || ' '
@@ -144,3 +144,4 @@ Date	     Description
     RETURN v_table_ddl;
   END;
 $$;
+SELECT * FROM public.pg_get_table_ddl('sample', 'address', 'FKEYS_INTERNAL');
