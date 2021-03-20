@@ -24,3 +24,11 @@ select * from public.pg_get_table_ddl('myschema','mytable');
 <br/><br/>
 select * from public.pg_get_table_ddl('myschema','mytable', 'FKEYS_EXTERNAL');
 <br/><br/>
+
+
+## psql formatting
+You can avoid column headers and plus signs at the end of each line by specifying the **-At** parameters:
+
+psql mydatabase  -At
+psql mydatabase  -At -c "select pg_get_table_ddl('myschema','mytable', 'FKEYS_EXTERNAL')"
+
