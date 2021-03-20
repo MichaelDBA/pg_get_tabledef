@@ -8,6 +8,31 @@ RETURNS text
 LANGUAGE plpgsql VOLATILE
 AS
 $$
+ /* ********************************************************************************
+COPYRIGHT NOTICE FOLLOWS.  DO NOT REMOVE
+Copyright (c) 2021 SQLEXEC LLC
+
+Permission to use, copy, modify, and distribute this software and its documentation 
+for any purpose, without fee, and without a written agreement is hereby granted, 
+provided that the above copyright notice and this paragraph and the following two paragraphs appear in all copies.
+
+IN NO EVENT SHALL SQLEXEC LLC BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT,INDIRECT SPECIAL, 
+INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS, ARISING OUT OF THE USE 
+OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF SQLEXEC LLC HAS BEEN ADVISED OF THE 
+POSSIBILITY OF SUCH DAMAGE.
+
+SQLEXEC LLC SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT LIMITED TO, 
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. 
+THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, AND SQLEXEC LLC HAS 
+NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+
+
+History:
+Date	     Description
+==========   ======================================================================  
+2021-03-20   Original coding
+
+************************************************************************************ */
   DECLARE
     -- the ddl we're building
     v_table_ddl text;
@@ -22,14 +47,8 @@ $$
     v_primary boolean := False;
     v_constraint_name text;
   BEGIN
-    -- grab the oid of the table; https://www.postgresql.org/docs/8.3/catalog-pg-class.html
-    SELECT c.oid INTO v_table_oid
-    FROM pg_catalog.pg_class c
-    LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-    WHERE 1=1
-      AND c.relkind = 'r' -- r = ordinary table; https://www.postgresql.org/docs/9.3/catalog-pg-class.html
-      AND c.relname = in_table -- the table name
-      AND n.nspname = in_schema; -- the schema
+    SELECT c.oid INTO v_table_oid FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relkind = 'r' AND c.relname = in_table -- the table name AND n.nspname = in_schema;
 
     -- throw an error if table was not found
     IF (v_table_oid IS NULL) THEN
@@ -41,17 +60,8 @@ $$
 
     -- define all of the columns in the table; https://stackoverflow.com/a/8153081/3068233
     FOR v_colrec IN
-      SELECT
-        c.column_name,
-        c.data_type,
-        c.udt_name,
-        c.character_maximum_length,
-        c.is_nullable,
-        c.column_default,
-        c.numeric_precision, c.numeric_scale, c.is_identity, c.identity_generation        
-      FROM information_schema.columns c
-      WHERE (table_schema, table_name) = (in_schema, in_table)
-      ORDER BY ordinal_position
+      SELECT c.column_name, c.data_type, c.udt_name, c.character_maximum_length, c.is_nullable, c.column_default, c.numeric_precision, c.numeric_scale, c.is_identity, c.identity_generation        
+      FROM information_schema.columns c WHERE (table_schema, table_name) = (in_schema, in_table) ORDER BY ordinal_position
     LOOP
       v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
         || v_colrec.column_name || ' '
@@ -67,9 +77,7 @@ $$
 
     -- define all the constraints in the; https://www.postgresql.org/docs/9.1/catalog-pg-constraint.html && https://dba.stackexchange.com/a/214877/75296
     FOR v_constraintrec IN
-      SELECT
-        con.conname as constraint_name,
-        con.contype as constraint_type,
+      SELECT con.conname as constraint_name, con.contype as constraint_type,
         CASE
           WHEN con.contype = 'p' THEN 1 -- primary key constraint
           WHEN con.contype = 'u' THEN 2 -- unique constraint
@@ -78,12 +86,8 @@ $$
           ELSE 5
         END as type_rank,
         pg_get_constraintdef(con.oid) as constraint_definition
-      FROM pg_catalog.pg_constraint con
-      JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-      WHERE nsp.nspname = in_schema
-      AND rel.relname = in_table
-      ORDER BY type_rank
+      FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+      WHERE nsp.nspname = in_schema AND rel.relname = in_table ORDER BY type_rank
     LOOP
       IF v_constraintrec.type_rank = 1 THEN
           v_primary := True;
@@ -107,9 +111,7 @@ $$
 
     -- suffix create statement with all of the indexes on the table
     FOR v_indexrec IN
-      SELECT indexdef, indexname
-      FROM pg_indexes
-      WHERE (schemaname, tablename) = (in_schema, in_table)
+      SELECT indexdef, indexname FROM pg_indexes WHERE (schemaname, tablename) = (in_schema, in_table)
     LOOP
       IF v_indexrec.indexname = v_constraint_name THEN
           continue;
@@ -123,3 +125,4 @@ $$
     RETURN v_table_ddl;
   END;
 $$;
+
