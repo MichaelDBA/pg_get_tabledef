@@ -1,8 +1,11 @@
--- SELECT * FROM public.pg_get_table_ddl('sample', 'address', True);
+-- Create enum types used by this function
+CREATE TYPE IF NOT EXISTS public.ddl_type AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE');
+
+-- SELECT * FROM public.pg_get_table_ddl('sample', 'address');
 CREATE OR REPLACE FUNCTION public.pg_get_table_ddl(
   in_schema varchar,
   in_table varchar,
-  bfkeys  boolean default True
+  in_fktype  public.ddl_type DEFAULT 'FKEYS_INTERNAL'
 )
 RETURNS text
 LANGUAGE plpgsql VOLATILE
@@ -31,6 +34,7 @@ History:
 Date	     Description
 ==========   ======================================================================  
 2021-03-20   Original coding
+2021-03-21   Change parameters to use ENUMERATED TYPES to add more options for FKEYS.
 
 ************************************************************************************ */
   DECLARE
@@ -46,6 +50,7 @@ Date	     Description
     v_indexrec record;
     v_primary boolean := False;
     v_constraint_name text;
+    v_fkey_defs text;
   BEGIN
     SELECT c.oid INTO v_table_oid FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind = 'r' AND c.relname = in_table AND n.nspname = in_schema;
@@ -93,9 +98,11 @@ Date	     Description
           v_primary := True;
           v_constraint_name := v_constraintrec.constraint_name;
       END IF;
-      IF NOT bfkeys AND v_constraintrec.constraint_type = 'f' THEN
+
+      IF in_fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
           continue;
       END IF;
+      RAISE NOTICE 'table_ddl=%   constraint_def=%',v_table_ddl, v_constraintrec.constraint_definition;
       v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
         || 'CONSTRAINT' || ' '
         || v_constraintrec.constraint_name || ' '
@@ -121,8 +128,19 @@ Date	     Description
         || ';' || E'\n';
     END LOOP;
 
+    -- Handle external foreign key defs here if applicable. 
+    IF in_fktype = 'FKEYS_EXTERNAL' THEN
+      SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' into v_fkey_defs 
+      FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
+      v_table_ddl := v_table_ddl || v_fkey_defs;
+    ELSIF  in_fktype = 'FKEYS_COMMENTED' THEN 
+      SELECT '-- ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' into v_fkey_defs 
+      FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
+      v_table_ddl := v_table_ddl || v_fkey_defs;
+    END IF;
+    
+
     -- return the ddl
     RETURN v_table_ddl;
   END;
 $$;
-
