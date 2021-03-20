@@ -22,5 +22,5 @@ There are multiple ways to call this function where the differences are only rel
 ## Examples
 select * from public.pg_get_table_ddl('myschema','mytable');
 <br/><br/>
-select * from public.pg_get_table_ddl('myschema','mytable', 'FKEYS_EXTERNAL);
+select * from public.pg_get_table_ddl('myschema','mytable', 'FKEYS_EXTERNAL');
 <br/><br/>
