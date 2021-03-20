@@ -2,7 +2,7 @@
 CREATE OR REPLACE FUNCTION public.pg_get_table_ddl(
   in_schema varchar,
   in_table varchar,
-  bfkeys  boolean
+  bfkeys  boolean default True
 )
 RETURNS text
 LANGUAGE plpgsql VOLATILE
@@ -48,7 +48,7 @@ Date	     Description
     v_constraint_name text;
   BEGIN
     SELECT c.oid INTO v_table_oid FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-    WHERE c.relkind = 'r' AND c.relname = in_table -- the table name AND n.nspname = in_schema;
+    WHERE c.relkind = 'r' AND c.relname = in_table AND n.nspname = in_schema;
 
     -- throw an error if table was not found
     IF (v_table_oid IS NULL) THEN
