@@ -22,9 +22,15 @@ There are multiple ways to call this function where the differences are only rel
 `FKEY ENUM`         Optional: FOREIGN KEY Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'
 <br/>
 `TRIG ENUM`         Optional: TRIGGER Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'
+<br/><br/>
+With respect to the TRIGGER enumerations:
 <br/>
-
-
+INTERNAL - part of table create statement
+<br/>
+EXTERNAL - ALTER TABLE ADD FOREIGN KEY statement
+<br/>
+COMMENTED - EXTERNAL, commented out
+<br/><br/>
 ## Examples
 select * from public.pg_get_tabledef('myschema','mytable');
 <br/><br/>
