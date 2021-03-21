@@ -13,7 +13,7 @@ Comments and suggestions are very welcome and will have my highest priority in a
 **pg_get_tabledef** was considered in the early days (PostgreSQL 8.2), but was ultimately cast aside due to supposed complexities involved when compared to pg_dump and different PG versions.  So since that time, everybody has been writing their own take on what getting table DDL should look like.  This is just one more attempt at it, which in my opinion, is the best one out there as far as I can tell.  
 
 ## Limitations
-The current version works with PostgreSQL versions, 10+
+The current version works with PostgreSQL versions, 10+, mostly due to changes in partitioning from inheritance to declarative that started in PG v10.
 
 
 ## Overview
