@@ -31,13 +31,13 @@ This function handles these types of objects:
 
 There are multiple ways to call this function where the differences are only related to whether Foreign Keys and/or Triggers are included.  Here is a description of each parameter:
 
-`in_schema`         Required: schema name
+<pre>`in_schema`         Required: schema name</pre>
 <br/>
-`in_table   `         Required: table name
+<pre>`in_table   `         Required: table name</pre>
 <br/>
-`FKEY ENUM`         <pre>Optional: Default=FKEYS_INTERNAL    Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'</pre>
+<pre>`FKEY ENUM`         Optional: Default=FKEYS_INTERNAL    Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'</pre>
 <br/>
-`TRIG ENUM`         <pre>Optional: Default=NO_TRIGGERS       Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'</pre>
+<pre>`TRIG ENUM`         Optional: Default=NO_TRIGGERS       Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'</pre>
 <br/><br/>
 With respect to the Foreign Key enumerations:
 <br/>
