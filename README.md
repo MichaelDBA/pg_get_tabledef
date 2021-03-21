@@ -16,7 +16,7 @@ There are multiple ways to call this function where the differences are only rel
 
 `in_schema`         Required: schema name
 <br/>
-`in_table`          Required: table name
+`in_table`            Required: table name
 <br/>
 `FKEY ENUM`         Optional: FOREIGN KEY Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'
 <br/>
