@@ -37,7 +37,7 @@ There are multiple ways to call this function where the differences are only rel
 <br/>
 `FKEY ENUM`         `Optional: Default=FKEYS_INTERNAL  `Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'
 <br/>
-`TRIG ENUM`         `Optional: Default=NO_TRIGGERS          `Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'
+`TRIG ENUM`         `Optional: Default=NO_TRIGGERS                   `Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'
 <br/><br/>
 With respect to the Foreign Key enumerations:
 <br/>
