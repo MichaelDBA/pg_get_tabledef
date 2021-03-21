@@ -40,23 +40,18 @@ SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL');
 SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
 
 Assumptions:
-1.  Only works with PG v10+
+1.  Only works with PG v10+ since DDL only works with declarative partitioning, not inheritance-based (V9.6 and earlier).
 
 History:
 Date	     Description
 ==========   ======================================================================  
-2021-03-20   Original coding
+2021-03-20   Original coding using some snippets from https://stackoverflow.com/questions/2593803/how-to-generate-the-create-table-sql-statement-for-an-existing-table-in-postgr
 2021-03-21   Added partitioned table support, i.e., PARTITION BY clause
 
 ************************************************************************************ */
   DECLARE
-    -- the ddl we're building
     v_table_ddl text;
-
-    -- data about the target table
     v_table_oid int;
-
-    -- records for looping
     v_colrec record;
     v_constraintrec record;
     v_indexrec record;
@@ -76,7 +71,6 @@ Date	     Description
     IF (v_table_oid IS NULL) THEN
       RAISE EXCEPTION 'table does not exist';
     END IF;
-
 
     -- see if this is a declarative child table and if so a one-liner does the trick.
     -- CREATE TABLE sample.foo_bar_baz_6 PARTITION OF sample.foo_bar_baz FOR VALUES FROM (6) TO (7); 
