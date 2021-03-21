@@ -1,4 +1,4 @@
-# pg_get_table_ddl
+# pg_get_tabledef
 PostgreSQL PL/PGSQL function that generates table DDL for the given schema/table.
 
 (c) 2021 SQLEXEC LLC
@@ -20,9 +20,9 @@ There are multiple ways to call this function where the differences are only rel
 
 
 ## Examples
-select * from public.pg_get_table_ddl('myschema','mytable');
+select * from public.pg_get_tabledef('myschema','mytable');
 <br/><br/>
-select * from public.pg_get_table_ddl('myschema','mytable', 'FKEYS_EXTERNAL');
+select * from public.pg_get_tabledef('myschema','mytable', 'FKEYS_EXTERNAL');
 <br/><br/>
 
 
@@ -31,5 +31,5 @@ You can avoid column headers and plus signs at the end of each line by specifyin
 
 psql mydatabase  -At
 <br/><br/>
-psql mydatabase  -At -c "select pg_get_table_ddl('myschema','mytable', 'FKEYS_EXTERNAL')"
+psql mydatabase  -At -c "select pg_get_tabledef('myschema','mytable', 'FKEYS_EXTERNAL')"
 
