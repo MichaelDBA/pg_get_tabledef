@@ -1,8 +1,8 @@
 -- Create enum types used by this function
 CREATE TYPE IF NOT EXISTS public.ddl_type AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE');
 
--- SELECT * FROM public.pg_get_table_ddl('sample', 'address');
-CREATE OR REPLACE FUNCTION public.pg_get_table_ddl(
+-- SELECT * FROM public.pg_get_tabledef('sample', 'address');
+CREATE OR REPLACE FUNCTION public.pg_get_tabledef(
   in_schema varchar,
   in_table varchar,
   in_fktype  public.ddl_type DEFAULT 'FKEYS_INTERNAL'
@@ -29,12 +29,15 @@ THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, AND SQLEXEC LLC HAS 
 NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 
+Suggestions: Use "-At" parameters to avoid column header and plus signs on output
+
+SELECT * FROM public.pg_get_tabledef('sample', 'address');
+SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL');
 
 History:
 Date	     Description
 ==========   ======================================================================  
 2021-03-20   Original coding
-2021-03-21   Change parameters to use ENUMERATED TYPES to add more options for FKEYS.
 
 ************************************************************************************ */
   DECLARE
@@ -144,4 +147,3 @@ Date	     Description
     RETURN v_table_ddl;
   END;
 $$;
-SELECT * FROM public.pg_get_table_ddl('sample', 'address', 'FKEYS_INTERNAL');
