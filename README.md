@@ -23,7 +23,7 @@ There are multiple ways to call this function where the differences are only rel
 <br/>
 `TRIG ENUM`         Optional: TRIGGER Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'
 <br/><br/>
-With respect to the TRIGGER enumerations:
+With respect to the Foreign Key enumerations:
 <br/>
 INTERNAL - part of table create statement
 <br/>
