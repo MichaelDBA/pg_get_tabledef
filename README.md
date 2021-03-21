@@ -13,6 +13,7 @@ Comments and suggestions are very welcome and will have my highest priority in a
 **pg_get_tabledef** was considered in the early days (PostgreSQL 8.2), but was ultimately cast aside due to supposed complexities involved when compared to pg_dump and different PG versions.  So since that time, everybody has been writing their own take on what getting table DDL should look like.  This is just one more attempt at it, which in my opinion, is the best one out there as far as I can tell at the present time.
 <br/><br/>
 I must give credits to some of the folks that provided code snippets that I used when starting to work on this project.  Here is the reference: https://stackoverflow.com/questions/2593803/how-to-generate-the-create-table-sql-statement-for-an-existing-table-in-postgr
+<br/>
 
 ## Limitations
 The current version works with PostgreSQL versions, 10+, mostly due to changes in partitioning from inheritance to declarative that started in PG v10.
@@ -34,9 +35,9 @@ There are multiple ways to call this function where the differences are only rel
 <br/>
 `in_table   `         Required: table name
 <br/>
-`FKEY ENUM`         Optional: FOREIGN KEY Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'
+`FKEY ENUM`         Optional: Default=FKEYS_INTERNAL    FOREIGN KEY Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'  DEFAULT=INTERNAL
 <br/>
-`TRIG ENUM`         Optional: TRIGGER Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'
+`TRIG ENUM`         Optional: Default=NO_TRIGGERS       TRIGGER Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'  DEFAULT=NO_TRIGGERS
 <br/><br/>
 With respect to the Foreign Key enumerations:
 <br/>
@@ -53,7 +54,6 @@ select * from public.pg_get_tabledef('myschema','mytable', 'FKEYS_EXTERNAL');
 <br/><br/>
 select * from public.pg_get_tabledef('myschema','mytable', 'FKEYS_EXTERNAL', 'INCLUDE_TRIGGERS');
 <br/><br/>
-
 
 ## psql formatting
 You can avoid column headers and plus signs at the end of each line by specifying the **-At** parameters:
