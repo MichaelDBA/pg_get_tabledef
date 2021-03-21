@@ -39,10 +39,14 @@ SELECT * FROM public.pg_get_tabledef('sample', 'address');
 SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL');
 SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
 
+Assumptions:
+1.  Only works with PG v10+
+
 History:
 Date	     Description
 ==========   ======================================================================  
 2021-03-20   Original coding
+2021-03-21   Added partitioned table support, i.e., PARTITION BY clause
 
 ************************************************************************************ */
   DECLARE
@@ -60,16 +64,30 @@ Date	     Description
     v_constraint_name text;
     v_fkey_defs text;
     v_trigger text := '';
+    v_partition_key text := '';
+    v_partbound text;
+    v_parent text;
+    
   BEGIN
     SELECT c.oid INTO v_table_oid FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-    WHERE c.relkind = 'r' AND c.relname = in_table AND n.nspname = in_schema;
+    WHERE c.relkind in ('r','p') AND c.relname = in_table AND n.nspname = in_schema;
 
     -- throw an error if table was not found
     IF (v_table_oid IS NULL) THEN
       RAISE EXCEPTION 'table does not exist';
     END IF;
 
-    -- start the create definition
+
+    -- see if this is a declarative child table and if so a one-liner does the trick.
+    -- CREATE TABLE sample.foo_bar_baz_6 PARTITION OF sample.foo_bar_baz FOR VALUES FROM (6) TO (7); 
+    SELECT pg_get_expr(c1.relpartbound, c1.oid, true) partbound, c2.relname parent INTO v_partbound, v_parent from pg_class c1, pg_namespace n, pg_inherits i, pg_class c2
+    WHERE n.nspname = in_schema and n.oid = c1.relnamespace and c1.relname = in_table and c1.oid = i.inhrelid and i.inhparent = c2.oid and c1.relkind = 'r' and  c1.relispartition;
+    IF (v_parent IS NOT NULL) THEN
+      v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ';' || E'\n';
+      RETURN v_table_ddl;  
+    END IF;
+
+    -- start the create definition for regular tables
     v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' (' || E'\n';
 
     -- define all of the columns in the table; https://stackoverflow.com/a/8153081/3068233
@@ -122,8 +140,17 @@ Date	     Description
     -- drop the last comma before ending the create statement
     v_table_ddl = substr(v_table_ddl, 0, length(v_table_ddl) - 1) || E'\n';
 
-    -- end the create definition
-    v_table_ddl := v_table_ddl || ');' || E'\n';
+    -- See if this is a partitioned table (pg_class.relkind = 'p') and add the partitioned key 
+    SELECT pg_get_partkeydef(c1.oid) as partition_key INTO v_partition_key FROM pg_class c1 JOIN pg_namespace n ON (n.oid = c1.relnamespace) LEFT JOIN pg_partitioned_table p ON (c1.oid = p.partrelid) 
+    WHERE n.nspname = in_schema and n.oid = c1.relnamespace and c1.relname = in_table and c1.relkind = 'p';
+    
+    IF v_partition_key IS NOT NULL AND v_partition_key <> '' THEN
+      -- add partition clause
+      v_table_ddl := v_table_ddl || ') PARTITION BY ' || v_partition_key || ';' || E'\n';  
+    ELSE
+      -- end the create definition
+      v_table_ddl := v_table_ddl || ');' || E'\n';    
+    END IF;  
 
     -- suffix create statement with all of the indexes on the table
     FOR v_indexrec IN
@@ -161,3 +188,4 @@ Date	     Description
     RETURN v_table_ddl;
   END;
 $$;
+SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
