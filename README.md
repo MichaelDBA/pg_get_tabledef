@@ -16,7 +16,7 @@ I must give credits to some of the folks that provided code snippets that I used
 <br/>
 
 ## Limitations
-The current version works with PostgreSQL versions, 10+, mostly due to changes in partitioning from inheritance to declarative that started in PG v10.
+The current version works with PostgreSQL versions, 10+, mostly due to changes in partitioning from inheritance to declarative that started in PG v10.  I might have time at some point to make it work for v9.6 and lower.
 
 
 ## Overview
