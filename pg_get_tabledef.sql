@@ -1,11 +1,15 @@
 -- Create enum types used by this function
-CREATE TYPE IF NOT EXISTS public.ddl_type AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE');
+DROP TYPE IF EXISTS public.tabledef_fkeys;
+DROP TYPE IF EXISTS public.tabledef_trigs;
+CREATE TYPE public.tabledef_fkeys AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE');
+CREATE TYPE public.tabledef_trigs AS ENUM ('INCLUDE_TRIGGERS', 'NO_TRIGGERS');
 
 -- SELECT * FROM public.pg_get_tabledef('sample', 'address');
 CREATE OR REPLACE FUNCTION public.pg_get_tabledef(
   in_schema varchar,
   in_table varchar,
-  in_fktype  public.ddl_type DEFAULT 'FKEYS_INTERNAL'
+  in_fktype  public.tabledef_fkeys DEFAULT 'FKEYS_INTERNAL',
+  in_trigger public.tabledef_trigs DEFAULT 'NO_TRIGGERS'
 )
 RETURNS text
 LANGUAGE plpgsql VOLATILE
@@ -33,6 +37,7 @@ Suggestions: Use "-At" parameters to avoid column header and plus signs on outpu
 
 SELECT * FROM public.pg_get_tabledef('sample', 'address');
 SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL');
+SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
 
 History:
 Date	     Description
@@ -54,6 +59,7 @@ Date	     Description
     v_primary boolean := False;
     v_constraint_name text;
     v_fkey_defs text;
+    v_trigger text := '';
   BEGIN
     SELECT c.oid INTO v_table_oid FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind = 'r' AND c.relname = in_table AND n.nspname = in_schema;
@@ -141,7 +147,15 @@ Date	     Description
       FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
       v_table_ddl := v_table_ddl || v_fkey_defs;
     END IF;
-    
+  
+    IF in_trigger = 'INCLUDE_TRIGGERS' THEN
+      select pg_get_triggerdef(t.oid, True) || ';' INTO v_trigger FROM pg_trigger t, pg_class c, pg_namespace n 
+      WHERE n.nspname = in_schema and n.oid = c.relnamespace and c.relname = in_table and c.relkind = 'r' and t.tgrelid = c.oid and NOT t.tgisinternal;
+      IF v_trigger <> '' THEN
+        v_table_ddl := v_table_ddl || v_trigger;
+      END IF;  
+    END IF;
+  
 
     -- return the ddl
     RETURN v_table_ddl;
