@@ -46,7 +46,8 @@ History:
 Date	     Description
 ==========   ======================================================================  
 2021-03-20   Original coding using some snippets from https://stackoverflow.com/questions/2593803/how-to-generate-the-create-table-sql-statement-for-an-existing-table-in-postgr
-2021-03-21   Added partitioned table support, i.e., PARTITION BY clause
+2021-03-21   Added partitioned table support, i.e., PARTITION BY clause.
+2021-03-21   Added WITH clause logic where storage parameters for tables are set.
 
 ************************************************************************************ */
   DECLARE
@@ -62,6 +63,9 @@ Date	     Description
     v_partition_key text := '';
     v_partbound text;
     v_parent text;
+    v_persist text;
+    v_temp  text; 
+    v_relopts text;
     
   BEGIN
     SELECT c.oid INTO v_table_oid FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -72,17 +76,41 @@ Date	     Description
       RAISE EXCEPTION 'table does not exist';
     END IF;
 
+    -- also see if there are any SET commands for this table, ie, autovacuum_enabled=off, fillfactor=70
+    WITH relopts AS (SELECT unnest(c.reloptions) relopts FROM pg_class c, pg_namespace n WHERE n.nspname = in_schema and n.oid = c.relnamespace and c.relname = in_table) 
+    SELECT string_agg(r.relopts, ', ') as relopts INTO v_temp from relopts r;
+    IF v_temp IS NULL THEN
+      v_relopts := '';
+    ELSE
+      v_relopts := ' WITH (' || v_temp || ')';
+      -- RAISE NOTICE 'relopts="%"', v_relopts;
+    END IF;
+
     -- see if this is a declarative child table and if so a one-liner does the trick.
     -- CREATE TABLE sample.foo_bar_baz_6 PARTITION OF sample.foo_bar_baz FOR VALUES FROM (6) TO (7); 
     SELECT pg_get_expr(c1.relpartbound, c1.oid, true) partbound, c2.relname parent INTO v_partbound, v_parent from pg_class c1, pg_namespace n, pg_inherits i, pg_class c2
     WHERE n.nspname = in_schema and n.oid = c1.relnamespace and c1.relname = in_table and c1.oid = i.inhrelid and i.inhparent = c2.oid and c1.relkind = 'r' and  c1.relispartition;
     IF (v_parent IS NOT NULL) THEN
-      v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ';' || E'\n';
+      IF v_relopts <> '' THEN
+        v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ';' || E'\n';
+      ELSE
+        v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ';' || E'\n';
+      END IF;
       RETURN v_table_ddl;  
     END IF;
 
+    -- see if this is unlogged or temporary table
+    select c.relpersistence into v_persist from pg_class c, pg_namespace n where n.nspname = in_schema and n.oid = c.relnamespace and c.relname = in_table and c.relkind = 'r';
+    IF v_persist = 'u' THEN
+      v_temp := 'UNLOGGED';
+    ELSIF v_persist = 't' THEN
+      v_temp := 'TEMPORARY';
+    ELSE
+      v_temp := '';
+    END IF;
+    
     -- start the create definition for regular tables
-    v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' (' || E'\n';
+    v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || in_schema || '.' || in_table || ' (' || E'\n';
 
     -- define all of the columns in the table; https://stackoverflow.com/a/8153081/3068233
     FOR v_colrec IN
@@ -141,6 +169,8 @@ Date	     Description
     IF v_partition_key IS NOT NULL AND v_partition_key <> '' THEN
       -- add partition clause
       v_table_ddl := v_table_ddl || ') PARTITION BY ' || v_partition_key || ';' || E'\n';  
+    ELSEIF v_relopts <> '' THEN
+      v_table_ddl := v_table_ddl || ') ' || v_relopts || ';' || E'\n';  
     ELSE
       -- end the create definition
       v_table_ddl := v_table_ddl || ');' || E'\n';    
@@ -177,9 +207,7 @@ Date	     Description
       END IF;  
     END IF;
   
-
     -- return the ddl
     RETURN v_table_ddl;
   END;
 $$;
-SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
