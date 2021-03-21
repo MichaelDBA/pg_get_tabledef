@@ -7,6 +7,7 @@ GNU V3 and MIT licenses are conveyed accordingly.
 <br/>
 Bugs can be reported @ michaeldba@sqlexec.com
 
+Comments and suggestions are very welcome and will have my highest priority in addressing.
 
 ## History
 **pg_get_tabledef** was considered in the early days (PostgreSQL 8.2), but was ultimately cast aside due to supposed complexities involved when compared to pg_dump and different PG versions.  So since that time, everybody has been writing their own take on what getting table DDL should look like.  This is just one more attempt at it, which in my opinion, is the best one out there as far as I can tell.  It includes column defaults, user-defined data types, check constraints, primary and foreign keys, indexes, and triggers.
