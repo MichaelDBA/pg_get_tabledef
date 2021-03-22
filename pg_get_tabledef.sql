@@ -48,6 +48,7 @@ Date	     Description
 2021-03-20   Original coding using some snippets from https://stackoverflow.com/questions/2593803/how-to-generate-the-create-table-sql-statement-for-an-existing-table-in-postgr
 2021-03-21   Added partitioned table support, i.e., PARTITION BY clause.
 2021-03-21   Added WITH clause logic where storage parameters for tables are set.
+2021-03-22   Added tablespace logic for tables and indexes.
 
 ************************************************************************************ */
   DECLARE
@@ -66,6 +67,7 @@ Date	     Description
     v_persist text;
     v_temp  text; 
     v_relopts text;
+    v_tablespace text;
     
   BEGIN
     SELECT c.oid INTO v_table_oid FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -76,6 +78,14 @@ Date	     Description
       RAISE EXCEPTION 'table does not exist';
     END IF;
 
+    -- get user-defined tablespaces if applicable
+    SELECT tablespace INTO v_temp FROM pg_tables WHERE schemaname = in_schema and tablename = in_table and tablespace IS NOT NULL;
+    IF v_tablespace IS NULL THEN
+      v_tablespace := 'TABLESPACE pg_default';
+    ELSE
+      v_tablespace := 'TABLESPACE ' || v_temp;
+    END IF;
+
     -- also see if there are any SET commands for this table, ie, autovacuum_enabled=off, fillfactor=70
     WITH relopts AS (SELECT unnest(c.reloptions) relopts FROM pg_class c, pg_namespace n WHERE n.nspname = in_schema and n.oid = c.relnamespace and c.relname = in_table) 
     SELECT string_agg(r.relopts, ', ') as relopts INTO v_temp from relopts r;
@@ -83,7 +93,6 @@ Date	     Description
       v_relopts := '';
     ELSE
       v_relopts := ' WITH (' || v_temp || ')';
-      -- RAISE NOTICE 'relopts="%"', v_relopts;
     END IF;
 
     -- see if this is a declarative child table and if so a one-liner does the trick.
@@ -92,9 +101,9 @@ Date	     Description
     WHERE n.nspname = in_schema and n.oid = c1.relnamespace and c1.relname = in_table and c1.oid = i.inhrelid and i.inhparent = c2.oid and c1.relkind = 'r' and  c1.relispartition;
     IF (v_parent IS NOT NULL) THEN
       IF v_relopts <> '' THEN
-        v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ';' || E'\n';
+        v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || ';' || E'\n';
       ELSE
-        v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ';' || E'\n';
+        v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || ';' || E'\n';
       END IF;
       RETURN v_table_ddl;  
     END IF;
@@ -162,30 +171,34 @@ Date	     Description
     -- drop the last comma before ending the create statement
     v_table_ddl = substr(v_table_ddl, 0, length(v_table_ddl) - 1) || E'\n';
 
+    -- ---------------------------------------------------------------------------
+    -- at this point we have everything up to the last table-enclosing parenthesis
+    -- ---------------------------------------------------------------------------
+    -- RAISE INFO 'ddlsofar: %', v_table_ddl;
+
+
     -- See if this is a partitioned table (pg_class.relkind = 'p') and add the partitioned key 
     SELECT pg_get_partkeydef(c1.oid) as partition_key INTO v_partition_key FROM pg_class c1 JOIN pg_namespace n ON (n.oid = c1.relnamespace) LEFT JOIN pg_partitioned_table p ON (c1.oid = p.partrelid) 
     WHERE n.nspname = in_schema and n.oid = c1.relnamespace and c1.relname = in_table and c1.relkind = 'p';
     
     IF v_partition_key IS NOT NULL AND v_partition_key <> '' THEN
       -- add partition clause
-      v_table_ddl := v_table_ddl || ') PARTITION BY ' || v_partition_key || ';' || E'\n';  
+      v_table_ddl := v_table_ddl || ') PARTITION BY ' || v_partition_key || ' ' || v_tablespace || ';' || E'\n';  
     ELSEIF v_relopts <> '' THEN
-      v_table_ddl := v_table_ddl || ') ' || v_relopts || ';' || E'\n';  
+      v_table_ddl := v_table_ddl || ') ' || v_relopts || ' ' || v_tablespace || ';' || E'\n';  
     ELSE
       -- end the create definition
-      v_table_ddl := v_table_ddl || ');' || E'\n';    
+      v_table_ddl := v_table_ddl || ' ' || v_tablespace || ');' || E'\n';    
     END IF;  
 
     -- suffix create statement with all of the indexes on the table
     FOR v_indexrec IN
-      SELECT indexdef, indexname FROM pg_indexes WHERE (schemaname, tablename) = (in_schema, in_table)
+      SELECT indexdef, COALESCE(tablespace, 'pg_default') as tablespace, indexname FROM pg_indexes WHERE (schemaname, tablename) = (in_schema, in_table)
     LOOP
       IF v_indexrec.indexname = v_constraint_name THEN
           continue;
       END IF;
-      v_table_ddl := v_table_ddl
-        || v_indexrec.indexdef
-        || ';' || E'\n';
+      v_table_ddl := v_table_ddl || v_indexrec.indexdef || ' TABLESPACE ' || v_indexrec.tablespace || ';' || E'\n';
     END LOOP;
 
     -- Handle external foreign key defs here if applicable. 
