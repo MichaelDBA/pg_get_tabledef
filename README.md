@@ -23,6 +23,7 @@ The current version works with PostgreSQL versions, 10+, mostly due to changes i
 This function handles these types of objects:
 * column defaults
 * user-defined data types
+* WITH clause storage parameters
 * check constraints
 * primary and foreign keys
 * indexes
