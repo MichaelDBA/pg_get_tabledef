@@ -26,8 +26,10 @@ This function handles these types of objects:
 * check constraints
 * primary and foreign keys
 * indexes
-* triggers
+* tablespaces for tables and indexes
+* triggers (not trigger functions)
 * Partitioned tables including their partitions
+* Temporary and unlogged tables
 
 There are multiple ways to call this function where the differences are only related to whether Foreign Keys and/or Triggers are included.  Here is a description of each parameter:
 
