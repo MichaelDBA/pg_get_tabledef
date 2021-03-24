@@ -5,7 +5,7 @@ PostgreSQL PL/PGSQL function that generates table DDL for the given schema/table
 <br/>
 GNU V3 and MIT licenses are conveyed accordingly.
 <br/>
-Bugs can be reported @ michaeldba@sqlexec.com or by creating an issue here.
+Bugs can be reported @ michaeldba@sqlexec.com or by creating an issue here, https://github.com/MichaelDBA/pg_get_tabledef/issues/new/choose
 
 Comments and suggestions are very welcome and will have my highest priority in addressing.  If possible, please provide example create table SQL.
 
