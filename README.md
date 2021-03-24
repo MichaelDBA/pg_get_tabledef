@@ -16,8 +16,7 @@ I must give credits to some of the folks that provided code snippets that I used
 <br/>
 
 ## Limitations
-The current version works with PostgreSQL versions, 10+, mostly due to changes in partitioning from inheritance to declarative that started in PG v10.  I might have time at some point to make it work for v9.6 and lower.
-
+None identified at this time.
 
 ## Overview
 This function handles these types of objects:
@@ -29,7 +28,7 @@ This function handles these types of objects:
 * indexes
 * tablespaces for tables and indexes
 * triggers (not trigger functions)
-* Partitioned tables including their partitions
+* Partitioned tables including their partitions (declarative and inheritance-based)
 * Temporary and unlogged tables
 
 There are multiple ways to call this function where the differences are only related to whether Foreign Keys and/or Triggers are included.  Here is a description of each parameter:
