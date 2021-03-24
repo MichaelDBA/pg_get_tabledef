@@ -23,7 +23,7 @@ None identified at this time.
 This function handles these types of objects:
 * column defaults
 * user-defined data types
-* WITH clause storage parameters
+* SET and WITH clause storage parameters
 * check constraints
 * primary and foreign keys
 * indexes
