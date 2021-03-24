@@ -11,7 +11,7 @@ Please provide example code along with issues reported if possible.
 <br/>
 
 ## History
-**pg_get_tabledef** was considered in the early days (PostgreSQL 8.2), but was ultimately cast aside due to supposed complexities involved when compared to pg_dump and different PG versions.  So since that time, everybody has been writing their own take on what getting table DDL should look like.  This is just one more attempt at it, which in my opinion, is the best one out there as far as I can tell at the present time.
+**pg_get_tabledef** was considered in the early days (PostgreSQL 8.2), but was ultimately cast aside due to supposed complexities involved when compared to pg_dump and different PG versions.  So since that time, everybody has been writing their own take on what getting table DDL should look like.  This is just one more attempt at it, which in my opinion, is the best one out there as far as I can tell.
 <br/><br/>
 I must give credits to some of the folks that provided code snippets that I used when starting to work on this project.  Here is the reference: https://stackoverflow.com/questions/2593803/how-to-generate-the-create-table-sql-statement-for-an-existing-table-in-postgr
 <br/>
