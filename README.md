@@ -1,5 +1,5 @@
 # pg_get_tabledef
-PostgreSQL PL/PGSQL function that generates table DDL for the given schema/table.
+"pg_get_tabledef" is a PostgreSQL PL/PGSQL function that generates table DDL for the given schema/table.
 
 (c) 2021 SQLEXEC LLC
 <br/>
