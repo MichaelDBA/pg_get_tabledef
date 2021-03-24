@@ -228,7 +228,7 @@ Date	     Description
       v_table_ddl := v_table_ddl || ') INHERITS (' || in_schema || '.' || v_parent || ') ' || E'\n' || v_relopts || ' ' || v_tablespace || ';' || E'\n';
     END IF;
 
-    IF NOT bPartition and NOT bInheritance THEN
+    IF v_pgversion >= 100000 AND NOT bPartition and NOT bInheritance THEN
       -- See if this is a partitioned table (pg_class.relkind = 'p') and add the partitioned key 
       SELECT pg_get_partkeydef(c1.oid) as partition_key INTO v_partition_key FROM pg_class c1 JOIN pg_namespace n ON (n.oid = c1.relnamespace) LEFT JOIN pg_partitioned_table p ON (c1.oid = p.partrelid) 
       WHERE n.nspname = in_schema and n.oid = c1.relnamespace and c1.relname = in_table and c1.relkind = 'p';
@@ -301,3 +301,9 @@ Date	     Description
     RETURN v_table_ddl;
   END;
 $$;
+SELECT * FROM public.pg_get_tabledef('sample', 'measurement', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
+SELECT * FROM public.pg_get_tabledef('sample', 'measurement_y2006m02', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
+SELECT * FROM public.pg_get_tabledef('sample', 'foo_bar_baz', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
+SELECT * FROM public.pg_get_tabledef('sample', 'foo_bar_baz_0', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
+SELECT * FROM public.pg_get_tabledef('sample', 'emp', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
+SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
