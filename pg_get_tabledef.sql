@@ -33,25 +33,18 @@ THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, AND SQLEXEC LLC HAS 
 NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 
-Suggestions: Use "-At" parameters to avoid column header and plus signs on output
-
-SELECT * FROM public.pg_get_tabledef('sample', 'address');
-SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL');
-SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
-
-Assumptions:
-1.  Only works with PG v10+ since DDL only works with declarative partitioning, not inheritance-based (V9.6 and earlier).
-
-History:
-Date	     Description
-==========   ======================================================================  
-2021-03-20   Original coding using some snippets from https://stackoverflow.com/questions/2593803/how-to-generate-the-create-table-sql-statement-for-an-existing-table-in-postgr
-2021-03-21   Added partitioned table support, i.e., PARTITION BY clause.
-2021-03-21   Added WITH clause logic where storage parameters for tables are set.
-2021-03-22   Added tablespace logic for tables and indexes.
-2021-03-24   Added inheritance-based partitioning support for PG 9.6 and lower.
-
 ************************************************************************************ */
+
+-- History:
+-- Date	     Description
+-- ==========   ======================================================================  
+-- 2021-03-20   Original coding using some snippets from 
+--              https://stackoverflow.com/questions/2593803/how-to-generate-the-create-table-sql-statement-for-an-existing-table-in-postgr
+-- 2021-03-21   Added partitioned table support, i.e., PARTITION BY clause.
+-- 2021-03-21   Added WITH clause logic where storage parameters for tables are set.
+-- 2021-03-22   Added tablespace logic for tables and indexes.
+-- 2021-03-24   Added inheritance-based partitioning support for PG 9.6 and lower.
+
   DECLARE
     v_table_ddl text;
     v_table_oid int;
@@ -301,9 +294,3 @@ Date	     Description
     RETURN v_table_ddl;
   END;
 $$;
-SELECT * FROM public.pg_get_tabledef('sample', 'measurement', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
-SELECT * FROM public.pg_get_tabledef('sample', 'measurement_y2006m02', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
-SELECT * FROM public.pg_get_tabledef('sample', 'foo_bar_baz', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
-SELECT * FROM public.pg_get_tabledef('sample', 'foo_bar_baz_0', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
-SELECT * FROM public.pg_get_tabledef('sample', 'emp', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
-SELECT * FROM public.pg_get_tabledef('sample', 'address', 'FKEYS_INTERNAL', 'INCLUDE_TRIGGERS');
