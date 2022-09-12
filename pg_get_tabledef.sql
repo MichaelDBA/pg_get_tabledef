@@ -67,7 +67,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2021-03-21   Added WITH clause logic where storage parameters for tables are set.
 -- 2021-03-22   Added tablespace logic for tables and indexes.
 -- 2021-03-24   Added inheritance-based partitioning support for PG 9.6 and lower.
--- 2022-09-12   Added fix for PostGIS columns where we do not presume the schema, leave without schema to imply public schema
+-- 2022-09-12   Fixed Issue#1: Added fix for PostGIS columns where we do not presume the schema, leave without schema to imply public schema
   DECLARE
     v_table_ddl text;
     v_table_oid int;
