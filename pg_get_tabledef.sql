@@ -1,3 +1,5 @@
+-- Change History:
+-- 2022-09-19  MJV FIX: Do not add CREATE INDEX statements if they indexes are defined within the Table definition as ADD CONSTRAINT.
 do $$ 
 <<first_block>>
 DECLARE
@@ -89,6 +91,9 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     bPartition boolean;
     bInheritance boolean;
     bRelispartition boolean;
+    constraintarr text[] := '{}';
+    constraintelement text;
+    bSkip boolean;
     
   BEGIN
     SELECT c.oid, (select setting from pg_settings where name = 'server_version_num') INTO v_table_oid, v_pgversion FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -159,7 +164,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         -- Jump to constraints and index section to add the check constraints and indexes and perhaps FKeys
       END IF;
     END IF;
-    -- RAISE NOTICE 'DDL so far3=%', v_table_ddl;
+    -- RAISE INFO 'DEBUG1: tabledef so far: %', v_table_ddl;
 
     IF NOT bPartition THEN
       -- see if this is unlogged or temporary table
@@ -177,7 +182,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     IF NOT bPartition THEN
       v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || in_schema || '.' || in_table || ' (' || E'\n';
     END IF;
-    
+    -- RAISE INFO 'DEBUG2: tabledef so far: %', v_table_ddl;    
     -- define all of the columns in the table unless we are in progress creating an inheritance-based child table
     IF NOT bPartition THEN
       FOR v_colrec IN
@@ -198,7 +203,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
           || ',' || E'\n';
       END LOOP;
     END IF;
-    -- RAISE NOTICE 'DDL so far4=%', v_table_ddl;
+    -- RAISE INFO 'DEBUG3: tabledef so far: %', v_table_ddl;    
     
     -- define all the constraints
     FOR v_constraintrec IN
@@ -221,6 +226,8 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
             continue;
           END IF;
       END IF;
+      -- RAISE INFO 'DEBUG4: constraint name= %', v_constraintrec.constraint_name;    
+      constraintarr := constraintarr || v_constraintrec.constraint_name;
 
       IF in_fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
           continue;
@@ -232,7 +239,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         || v_constraintrec.constraint_definition
         || ',' || E'\n';
     END LOOP;
-
+    -- RAISE INFO 'DEBUG5: tabledef so far: %', v_table_ddl;    
     -- drop the last comma before ending the create statement
     v_table_ddl = substr(v_table_ddl, 0, length(v_table_ddl) - 1) || E'\n';
 
@@ -276,23 +283,32 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     FOR v_indexrec IN
       SELECT indexdef, COALESCE(tablespace, 'pg_default') as tablespace, indexname FROM pg_indexes WHERE (schemaname, tablename) = (in_schema, in_table)
     LOOP
-      -- RAISE NOTICE 'indexdef=%', v_indexrec.indexdef;
-      IF v_indexrec.indexname = v_constraint_name THEN
-          continue;
-      END IF;
+      -- RAISE INFO 'DEBUG6: indexname=%', v_indexrec.indexname;             
+      -- loop through constraints and skip ones already defined
+      bSkip = False;
+      FOREACH constraintelement IN ARRAY constraintarr
+      LOOP 
+         IF constraintelement = v_indexrec.indexname THEN
+             -- RAISE INFO 'DEBUG7: skipping index, %', v_indexrec.indexname;
+             bSkip = True;
+             EXIT;
+         END IF;
+      END LOOP;   
+      if bSkip THEN CONTINUE; END IF;
       
       -- Add IF NOT EXISTS clause so partition index additions will not be created if declarative partition in effect and index already created on parent
       v_indexrec.indexdef := REPLACE(v_indexrec.indexdef, 'CREATE INDEX', 'CREATE INDEX IF NOT EXISTS');
+      -- RAISE INFO 'DEBUG8: adding index, %', v_indexrec.indexname;
       
       -- NOTE:  cannot specify default tablespace for partitioned relations
       IF v_partition_key IS NOT NULL AND v_partition_key <> '' THEN
-        v_table_ddl := v_table_ddl || v_indexrec.indexdef || ';' || E'\n';
+          v_table_ddl := v_table_ddl || v_indexrec.indexdef || ';' || E'\n';
       ELSE
-        v_table_ddl := v_table_ddl || v_indexrec.indexdef || ' TABLESPACE ' || v_indexrec.tablespace || ';' || E'\n';
+          v_table_ddl := v_table_ddl || v_indexrec.indexdef || ' TABLESPACE ' || v_indexrec.tablespace || ';' || E'\n';
       END IF;
       
     END LOOP;
-    -- RAISE NOTICE 'ddlsofar4: %', v_table_ddl;
+    -- RAISE INFO 'DEBUG9: tabledef so far: %', v_table_ddl;    
     
     -- Handle external foreign key defs here if applicable. 
     IF in_fktype = 'FKEYS_EXTERNAL' THEN
