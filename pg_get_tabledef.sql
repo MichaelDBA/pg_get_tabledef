@@ -1,6 +1,7 @@
 -- Change History:
 -- 2022-09-19  MJV FIX: Do not add CREATE INDEX statements if they indexes are defined within the Table definition as ADD CONSTRAINT.
 -- 2022-12-03  MJV FIX: Handle NULL condition for ENUMs
+-- 2022-12-03  MJV ENHANCEMENT: using VARIADIC for ENUMs
 do $$ 
 <<first_block>>
 DECLARE
@@ -10,32 +11,23 @@ BEGIN
   FROM pg_catalog.pg_type t LEFT JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace WHERE (t.typrelid = 0 OR (SELECT c.relkind = 'c' FROM pg_catalog.pg_class c WHERE c.oid = t.typrelid)) 
   AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_type el WHERE el.oid = t.typelem AND el.typarray = t.oid)
   AND n.nspname <> 'pg_catalog' AND n.nspname <> 'information_schema' AND pg_catalog.pg_type_is_visible(t.oid)
-  AND pg_catalog.format_type(t.oid, NULL) in ('tabledef_fkeys','tabledef_trigs');
+  -- AND pg_catalog.format_type(t.oid, NULL) in ('tabledef_fkeys','tabledef_trigs', 'tabledefs');
+  AND pg_catalog.format_type(t.oid, NULL) in ('tabledefs');
   IF cnt = 0 THEN
     RAISE INFO 'Creating custom types.';
-    CREATE TYPE public.tabledef_fkeys AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE');
-    CREATE TYPE public.tabledef_trigs AS ENUM ('INCLUDE_TRIGGERS', 'NO_TRIGGERS');
+    -- CREATE TYPE public.tabledef_fkeys AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE');
+    -- CREATE TYPE public.tabledef_trigs AS ENUM ('INCLUDE_TRIGGERS', 'NO_TRIGGERS');
+	CREATE TYPE public.tabledefs AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
   END IF;
 end first_block $$;
 
--- SELECT count(*) into cnt
--- FROM pg_catalog.pg_type t LEFT JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace WHERE (t.typrelid = 0 OR (SELECT c.relkind = 'c' FROM pg_catalog.pg_class c WHERE c.oid = t.typrelid)) 
--- AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_type el WHERE el.oid = t.typelem AND el.typarray = t.oid)
--- AND n.nspname <> 'pg_catalog' AND n.nspname <> 'information_schema' AND pg_catalog.pg_type_is_visible(t.oid)
--- AND pg_catalog.format_type(t.oid, NULL) in ('tabledef_fkeys','tabledef_trigs');
-
--- Create enum types used by this function
--- DROP TYPE IF EXISTS public.tabledef_fkeys;
--- DROP TYPE IF EXISTS public.tabledef_trigs;
--- CREATE TYPE public.tabledef_fkeys AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE');
--- CREATE TYPE public.tabledef_trigs AS ENUM ('INCLUDE_TRIGGERS', 'NO_TRIGGERS');
-
--- SELECT * FROM public.pg_get_tabledef('sample', 'address');
+-- SELECT * FROM public.pg_get_tabledef('sample', 'address', false);
+DROP FUNCTION IF EXISTS pg_get_tabledef(character varying,character varying,boolean,tabledefs[]);
 CREATE OR REPLACE FUNCTION public.pg_get_tabledef(
   in_schema varchar,
   in_table varchar,
-  in_fktype  public.tabledef_fkeys DEFAULT 'FKEYS_INTERNAL',
-  in_trigger public.tabledef_trigs DEFAULT 'NO_TRIGGERS'
+  _verbose boolean,
+  VARIADIC arr public.tabledefs[] DEFAULT '{}':: public.tabledefs[]
 )
 RETURNS text
 LANGUAGE plpgsql VOLATILE
@@ -96,7 +88,17 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     constraintelement text;
     bSkip boolean;
 	bVerbose boolean := False;
-	-- exception variables
+
+    -- assume defaults for ENUMs at the getgo	
+	fkcnt            int := 0;
+	trigcnt          int := 0;
+    fktype           public.tabledefs := 'FKEYS_INTERNAL';
+    trigtype         public.tabledefs := 'NO_TRIGGERS';
+    arglen           integer;
+	vargs            text;
+	avarg            public.tabledefs;
+
+    -- exception variables
     v_ret            text;
     v_diag1          text;
     v_diag2          text;
@@ -104,8 +106,38 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     v_diag4          text;
     v_diag5          text;
     v_diag6          text;
-  
+	
   BEGIN
+    IF _verbose THEN bVerbose = True; END IF;
+	
+	arglen := array_length($4, 1);
+    IF arglen IS NULL THEN
+	   -- nothing to do, so assume defaults
+	   NULL;
+	ELSE
+	   -- loop thru args
+	   -- IF 'NO_TRIGGERS' = ANY ($4)
+	   -- select array_to_string($4, ',', '***') INTO vargs;
+	   IF bVerbose THEN RAISE NOTICE 'arguments=%', $4; END IF;
+	   FOREACH avarg IN ARRAY $4 LOOP
+		   IF bVerbose THEN RAISE INFO 'arg=%', avarg; END IF;
+		   IF avarg = 'FKEYS_INTERNAL' OR avarg = 'FKEYS_EXTERNAL' OR avarg = 'FKEYS_COMMENTED' THEN
+		       fkcnt = fkcnt + 1;
+			   fktype = avarg;
+		   ELSEIF avarg = 'INCLUDE_TRIGGERS' OR avarg = 'NO_TRIGGERS' THEN
+		       trigcnt = trigcnt + 1;
+			   trigtype = avarg;
+		   END IF;
+	   END LOOP;
+	   IF fkcnt > 1 THEN 
+	       RAISE WARNING 'Only one foreign key option can be provided. You provided %', fkcnt;
+		   RETURN '';
+       ELSEIF trigcnt > 1 THEN 
+	       RAISE WARNING 'Only one trigger option can be provided. You provided %', trigcnt;
+		   RETURN '';
+       END IF;		   		   
+	END IF;
+	
     SELECT c.oid, (select setting from pg_settings where name = 'server_version_num') INTO v_table_oid, v_pgversion FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind in ('r','p') AND c.relname = in_table AND n.nspname = in_schema;
     IF bVerbose THEN RAISE NOTICE 'version=%', v_pgversion; END IF;
@@ -240,7 +272,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
       -- RAISE INFO 'DEBUG4: constraint name= %', v_constraintrec.constraint_name;    
       constraintarr := constraintarr || v_constraintrec.constraint_name;
 
-      IF in_fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
+      IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
           continue;
       END IF;
 
@@ -323,13 +355,13 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     IF bVerbose THEN RAISE INFO '(6)tabledef so far: %', v_table_ddl; END IF;
     
     -- Handle external foreign key defs here if applicable. 
-    IF in_fktype = 'FKEYS_EXTERNAL' THEN
+    IF fktype = 'FKEYS_EXTERNAL' THEN
       SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' into v_fkey_defs 
       FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
 	  IF v_fkey_defs IS NOT NULL THEN
           v_table_ddl := v_table_ddl || v_fkey_defs;
 	  END IF;
-    ELSIF  in_fktype = 'FKEYS_COMMENTED' THEN 
+    ELSIF  fktype = 'FKEYS_COMMENTED' THEN 
       SELECT '-- ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' into v_fkey_defs 
       FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
 	  IF v_fkey_defs IS NOT NULL THEN
@@ -338,7 +370,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     END IF;
     IF bVerbose THEN RAISE INFO '(7)tabledef so far: %', v_table_ddl; END IF;
 	
-    IF in_trigger = 'INCLUDE_TRIGGERS' THEN
+    IF trigtype = 'INCLUDE_TRIGGERS' THEN
       select pg_get_triggerdef(t.oid, True) || ';' INTO v_trigger FROM pg_trigger t, pg_class c, pg_namespace n 
       WHERE n.nspname = in_schema and n.oid = c.relnamespace and c.relname = in_table and c.relkind = 'r' and t.tgrelid = c.oid and NOT t.tgisinternal;
       IF v_trigger <> '' THEN
