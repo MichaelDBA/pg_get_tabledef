@@ -17,7 +17,7 @@ I must give credits to some of the folks that provided code snippets that I used
 <br/>
 
 ## Limitations
-None identified at this time.
+No ACL information is returned.
 
 ## Overview
 This function handles these types of objects:
