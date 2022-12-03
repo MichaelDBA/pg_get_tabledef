@@ -1,7 +1,6 @@
 -- Change History:
 -- 2022-09-19  MJV FIX: Do not add CREATE INDEX statements if they indexes are defined within the Table definition as ADD CONSTRAINT.
 -- 2022-12-03  MJV FIX: Handle NULL condition for ENUMs
--- 2022-12-03  MJV ENHANCEMENT: using VARIADIC for ENUMs
 do $$ 
 <<first_block>>
 DECLARE
@@ -110,33 +109,33 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
   BEGIN
     IF _verbose THEN bVerbose = True; END IF;
 	
-	arglen := array_length($4, 1);
+    arglen := array_length($4, 1);
     IF arglen IS NULL THEN
-	   -- nothing to do, so assume defaults
-	   NULL;
-	ELSE
-	   -- loop thru args
-	   -- IF 'NO_TRIGGERS' = ANY ($4)
-	   -- select array_to_string($4, ',', '***') INTO vargs;
-	   IF bVerbose THEN RAISE NOTICE 'arguments=%', $4; END IF;
-	   FOREACH avarg IN ARRAY $4 LOOP
-		   IF bVerbose THEN RAISE INFO 'arg=%', avarg; END IF;
-		   IF avarg = 'FKEYS_INTERNAL' OR avarg = 'FKEYS_EXTERNAL' OR avarg = 'FKEYS_COMMENTED' THEN
-		       fkcnt = fkcnt + 1;
-			   fktype = avarg;
-		   ELSEIF avarg = 'INCLUDE_TRIGGERS' OR avarg = 'NO_TRIGGERS' THEN
-		       trigcnt = trigcnt + 1;
-			   trigtype = avarg;
-		   END IF;
-	   END LOOP;
-	   IF fkcnt > 1 THEN 
-	       RAISE WARNING 'Only one foreign key option can be provided. You provided %', fkcnt;
-		   RETURN '';
-       ELSEIF trigcnt > 1 THEN 
-	       RAISE WARNING 'Only one trigger option can be provided. You provided %', trigcnt;
-		   RETURN '';
-       END IF;		   		   
-	END IF;
+        -- nothing to do, so assume defaults
+        NULL;
+    ELSE
+        -- loop thru args
+        -- IF 'NO_TRIGGERS' = ANY ($4)
+        -- select array_to_string($4, ',', '***') INTO vargs;
+        IF bVerbose THEN RAISE NOTICE 'arguments=%', $4; END IF;
+        FOREACH avarg IN ARRAY $4 LOOP
+            IF bVerbose THEN RAISE INFO 'arg=%', avarg; END IF;
+            IF avarg = 'FKEYS_INTERNAL' OR avarg = 'FKEYS_EXTERNAL' OR avarg = 'FKEYS_COMMENTED' THEN
+                fkcnt = fkcnt + 1;
+                fktype = avarg;
+            ELSEIF avarg = 'INCLUDE_TRIGGERS' OR avarg = 'NO_TRIGGERS' THEN
+                trigcnt = trigcnt + 1;
+                trigtype = avarg;
+            END IF;
+        END LOOP;
+        IF fkcnt > 1 THEN 
+	    RAISE WARNING 'Only one foreign key option can be provided. You provided %', fkcnt;
+	    RETURN '';
+        ELSEIF trigcnt > 1 THEN 
+            RAISE WARNING 'Only one trigger option can be provided. You provided %', trigcnt;
+            RETURN '';
+        END IF;		   		   
+    END IF;
 	
     SELECT c.oid, (select setting from pg_settings where name = 'server_version_num') INTO v_table_oid, v_pgversion FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind in ('r','p') AND c.relname = in_table AND n.nspname = in_schema;
