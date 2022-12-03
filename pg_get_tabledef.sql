@@ -1,5 +1,6 @@
 -- Change History:
 -- 2022-09-19  MJV FIX: Do not add CREATE INDEX statements if they indexes are defined within the Table definition as ADD CONSTRAINT.
+-- 2022-12-03  MJV FIX: Handle NULL condition for ENUMs
 do $$ 
 <<first_block>>
 DECLARE
@@ -42,7 +43,7 @@ AS
 $$
  /* ********************************************************************************
 COPYRIGHT NOTICE FOLLOWS.  DO NOT REMOVE
-Copyright (c) 2021 SQLEXEC LLC
+Copyright (c) 2022 SQLEXEC LLC
 
 Permission to use, copy, modify, and distribute this software and its documentation 
 for any purpose, without fee, and without a written agreement is hereby granted, 
@@ -94,11 +95,13 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     constraintarr text[] := '{}';
     constraintelement text;
     bSkip boolean;
+	bVerbose boolean := False;
     
   BEGIN
     SELECT c.oid, (select setting from pg_settings where name = 'server_version_num') INTO v_table_oid, v_pgversion FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind in ('r','p') AND c.relname = in_table AND n.nspname = in_schema;
-    -- RAISE NOTICE 'version=%', v_pgversion;
+    IF bVerbose THEN RAISE NOTICE 'version=%', v_pgversion; END IF;
+	
     -- throw an error if table was not found
     IF (v_table_oid IS NULL) THEN
       RAISE EXCEPTION 'table does not exist';
@@ -164,7 +167,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         -- Jump to constraints and index section to add the check constraints and indexes and perhaps FKeys
       END IF;
     END IF;
-    -- RAISE INFO 'DEBUG1: tabledef so far: %', v_table_ddl;
+	IF bVerbose THEN RAISE INFO '(1)tabledef so far: %', v_table_ddl; END IF;
 
     IF NOT bPartition THEN
       -- see if this is unlogged or temporary table
@@ -203,7 +206,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
           || ',' || E'\n';
       END LOOP;
     END IF;
-    -- RAISE INFO 'DEBUG3: tabledef so far: %', v_table_ddl;    
+    IF bVerbose THEN RAISE INFO '(2)tabledef so far: %', v_table_ddl; END IF;
     
     -- define all the constraints
     FOR v_constraintrec IN
@@ -239,14 +242,15 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         || v_constraintrec.constraint_definition
         || ',' || E'\n';
     END LOOP;
-    -- RAISE INFO 'DEBUG5: tabledef so far: %', v_table_ddl;    
+    IF bVerbose THEN RAISE INFO '(3)tabledef so far: %', v_table_ddl; END IF;
+	
     -- drop the last comma before ending the create statement
     v_table_ddl = substr(v_table_ddl, 0, length(v_table_ddl) - 1) || E'\n';
 
     -- ---------------------------------------------------------------------------
     -- at this point we have everything up to the last table-enclosing parenthesis
     -- ---------------------------------------------------------------------------
-    -- RAISE NOTICE 'ddlsofar1: %', v_table_ddl;
+    IF bVerbose THEN RAISE INFO '(4)tabledef so far: %', v_table_ddl; END IF;
 
     -- See if this is an inheritance-based child table and finish up the table create.
     IF bPartition and bInheritance THEN
@@ -271,7 +275,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
       END IF;  
     END IF;
 
-    -- RAISE NOTICE 'ddlsofar2: %', v_table_ddl;
+    IF bVerbose THEN RAISE INFO '(5)tabledef so far: %', v_table_ddl; END IF;
     
     -- Add closing paren for regular tables
     -- IF NOT bPartition THEN
@@ -308,19 +312,23 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
       END IF;
       
     END LOOP;
-    -- RAISE INFO 'DEBUG9: tabledef so far: %', v_table_ddl;    
+    IF bVerbose THEN RAISE INFO '(6)tabledef so far: %', v_table_ddl; END IF;
     
     -- Handle external foreign key defs here if applicable. 
     IF in_fktype = 'FKEYS_EXTERNAL' THEN
       SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' into v_fkey_defs 
       FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
-      v_table_ddl := v_table_ddl || v_fkey_defs;
+	  IF v_fkey_defs IS NOT NULL THEN
+          v_table_ddl := v_table_ddl || v_fkey_defs;
+	  END IF;
     ELSIF  in_fktype = 'FKEYS_COMMENTED' THEN 
       SELECT '-- ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' into v_fkey_defs 
       FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
-      v_table_ddl := v_table_ddl || v_fkey_defs;
+	  IF v_fkey_defs IS NOT NULL THEN
+          v_table_ddl := v_table_ddl || v_fkey_defs;
+      END IF;
     END IF;
-    -- RAISE NOTICE 'ddlsofar5: %', v_table_ddl;
+    IF bVerbose THEN RAISE INFO '(7)tabledef so far: %', v_table_ddl; END IF;
     IF in_trigger = 'INCLUDE_TRIGGERS' THEN
       select pg_get_triggerdef(t.oid, True) || ';' INTO v_trigger FROM pg_trigger t, pg_class c, pg_namespace n 
       WHERE n.nspname = in_schema and n.oid = c.relnamespace and c.relname = in_table and c.relkind = 'r' and t.tgrelid = c.oid and NOT t.tgisinternal;
