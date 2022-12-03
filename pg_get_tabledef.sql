@@ -96,7 +96,15 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     constraintelement text;
     bSkip boolean;
 	bVerbose boolean := False;
-    
+	-- exception variables
+    v_ret            text;
+    v_diag1          text;
+    v_diag2          text;
+    v_diag3          text;
+    v_diag4          text;
+    v_diag5          text;
+    v_diag6          text;
+  
   BEGIN
     SELECT c.oid, (select setting from pg_settings where name = 'server_version_num') INTO v_table_oid, v_pgversion FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind in ('r','p') AND c.relname = in_table AND n.nspname = in_schema;
@@ -329,6 +337,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
       END IF;
     END IF;
     IF bVerbose THEN RAISE INFO '(7)tabledef so far: %', v_table_ddl; END IF;
+	
     IF in_trigger = 'INCLUDE_TRIGGERS' THEN
       select pg_get_triggerdef(t.oid, True) || ';' INTO v_trigger FROM pg_trigger t, pg_class c, pg_namespace n 
       WHERE n.nspname = in_schema and n.oid = c.relnamespace and c.relname = in_table and c.relkind = 'r' and t.tgrelid = c.oid and NOT t.tgisinternal;
@@ -341,5 +350,17 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     v_table_ddl := v_table_ddl || E'\n';
 
     RETURN v_table_ddl;
+	
+    EXCEPTION
+    WHEN others THEN
+    BEGIN
+      GET STACKED DIAGNOSTICS v_diag1 = MESSAGE_TEXT, v_diag2 = PG_EXCEPTION_DETAIL, v_diag3 = PG_EXCEPTION_HINT, v_diag4 = RETURNED_SQLSTATE, v_diag5 = PG_CONTEXT, v_diag6 = PG_EXCEPTION_CONTEXT;
+      -- v_ret := 'line=' || v_diag6 || '. '|| v_diag4 || '. ' || v_diag1 || ' .' || v_diag2 || ' .' || v_diag3;
+      v_ret := 'line=' || v_diag6 || '. '|| v_diag4 || '. ' || v_diag1;
+      RAISE EXCEPTION '%', v_ret;
+      -- put additional coding here if necessarY
+       RETURN '';
+    END;
+
   END;
 $$;
