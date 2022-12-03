@@ -36,6 +36,7 @@ There are multiple ways to call this function where the differences are only rel
 
 <pre>in_schema  Required: schema name</pre>
 <pre>in_table   Required: table name</pre>
+<pre>verbose    Required: default=false, useful for debuggin</pre>
 <pre>FKEY ENUM  Optional: Default=FKEYS_INTERNAL  Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'</pre>
 <pre>TRIG ENUM  Optional: Default=NO_TRIGGERS     Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'</pre>
 
@@ -48,11 +49,11 @@ EXTERNAL - ALTER TABLE ADD FOREIGN KEY statement
 COMMENTED - EXTERNAL, commented out
 <br/><br/>
 ## Examples
-select * from public.pg_get_tabledef('myschema','mytable');
+select * from public.pg_get_tabledef('myschema','mytable', false);
 <br/><br/>
-select * from public.pg_get_tabledef('myschema','mytable', 'FKEYS_EXTERNAL');
+select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL');
 <br/><br/>
-select * from public.pg_get_tabledef('myschema','mytable', 'FKEYS_EXTERNAL', 'INCLUDE_TRIGGERS');
+select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL', 'INCLUDE_TRIGGERS');
 <br/><br/>
 
 ## psql formatting
@@ -60,5 +61,5 @@ You can avoid column headers and plus signs at the end of each line by specifyin
 
 psql mydatabase  -At
 <br/><br/>
-psql mydatabase  -At -c "select pg_get_tabledef('myschema','mytable', 'FKEYS_EXTERNAL')"
+psql mydatabase  -At -c "select pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL')"
 
