@@ -1,6 +1,7 @@
 -- Change History:
 -- 2022-09-19  MJV FIX: Do not add CREATE INDEX statements if they indexes are defined within the Table definition as ADD CONSTRAINT.
 -- 2022-12-03  MJV FIX: Handle NULL condition for ENUMs
+-- 2022-12-07  MJV FIX: not setting tablespace correctly for user defined tablespaces
 do $$ 
 <<first_block>>
 DECLARE
@@ -148,12 +149,12 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 
     -- get user-defined tablespaces if applicable
     SELECT tablespace INTO v_temp FROM pg_tables WHERE schemaname = in_schema and tablename = in_table and tablespace IS NOT NULL;
-    IF v_tablespace IS NULL THEN
+    IF v_temp IS NULL THEN
       v_tablespace := 'TABLESPACE pg_default';
     ELSE
       v_tablespace := 'TABLESPACE ' || v_temp;
     END IF;
-
+    
     -- also see if there are any SET commands for this table, ie, autovacuum_enabled=off, fillfactor=70
     WITH relopts AS (SELECT unnest(c.reloptions) relopts FROM pg_class c, pg_namespace n WHERE n.nspname = in_schema and n.oid = c.relnamespace and c.relname = in_table) 
     SELECT string_agg(r.relopts, ', ') as relopts INTO v_temp from relopts r;
