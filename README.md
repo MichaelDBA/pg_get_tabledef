@@ -62,4 +62,5 @@ You can avoid column headers and plus signs at the end of each line by specifyin
 psql mydatabase  -At
 <br/><br/>
 psql mydatabase  -At -c "select pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL')"
-
+<br/><br/>
+or within a psql sesssion: \pset format unaligned
