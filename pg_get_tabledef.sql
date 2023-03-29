@@ -270,7 +270,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
           END IF;
       END IF;
       -- RAISE INFO 'DEBUG4: constraint name= %', v_constraintrec.constraint_name;    
-      constraintarr := constraintarr || v_constraintrec.constraint_name;
+      constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
 
       IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
           continue;
