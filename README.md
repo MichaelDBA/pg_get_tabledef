@@ -64,3 +64,4 @@ psql mydatabase  -At
 psql mydatabase  -At -c "select pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL')"
 <br/><br/>
 or within a psql sesssion: \pset format unaligned
+
