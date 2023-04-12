@@ -23,6 +23,7 @@ No ACL information is returned.
 This function handles these types of objects:
 * column defaults
 * user-defined data types
+* arrays
 * SET and WITH clause storage parameters
 * check constraints
 * primary and foreign keys
