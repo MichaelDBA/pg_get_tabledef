@@ -37,7 +37,7 @@ There are multiple ways to call this function where the differences are only rel
 
 <pre>in_schema  Required: schema name</pre>
 <pre>in_table   Required: table name</pre>
-<pre>verbose    Required: boolean - default=false, useful for debugging</pre>
+<pre>verbose    Required: boolean - default=false, useful for debugging when set to True</pre>
 <pre>FKEY ENUM  Optional: Default=FKEYS_INTERNAL  Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'</pre>
 <pre>TRIG ENUM  Optional: Default=NO_TRIGGERS     Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'</pre>
 
