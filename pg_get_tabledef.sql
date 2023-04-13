@@ -22,16 +22,16 @@ BEGIN
 end first_block $$;
 
 CREATE OR REPLACE FUNCTION public.pg_get_coldef(
-  in_schema varchar,
-  in_table varchar,
-  in_column varchar
+  in_schema text,
+  in_table text,
+  in_column text
 )
 RETURNS text
 LANGUAGE plpgsql VOLATILE
 AS
 $$
 DECLARE
-coldef varchar;
+coldef text;
 BEGIN
   SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) INTO coldef FROM pg_namespace n, pg_class c, pg_attribute a, pg_type t 
   WHERE n.nspname = in_schema AND n.oid = c.relnamespace AND c.relname = in_table AND a.attname = in_column and a.attnum > 0 AND a.attrelid = c.oid AND a.atttypid = t.oid ORDER BY a.attnum;
@@ -83,6 +83,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2021-03-24   Added inheritance-based partitioning support for PG 9.6 and lower.
 -- 2022-09-12   Fixed Issue#1: Added fix for PostGIS columns where we do not presume the schema, leave without schema to imply public schema
 -- 2023-04-12   Fixed Issue#6: Handle array types: int, bigint, varchar, even varchars with precisions.
+-- 2023-04-13   Fixed Issue#7: Incomplete fixing of issue#6
   DECLARE
     v_table_ddl text;
     v_table_oid int;
