@@ -17,7 +17,8 @@ I must give credits to some of the folks that provided code snippets that I used
 <br/>
 
 ## Limitations
-No ACL information is returned.
+* No ACL information is returned.
+* Does not currently work for table relationships across multiple schemas, e.g., partitioning across schemas.
 
 ## Overview
 This function handles these types of objects:
