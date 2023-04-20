@@ -1,7 +1,7 @@
 -- Change History:
--- 2022-09-19  MJV FIX: Do not add CREATE INDEX statements if they indexes are defined within the Table definition as ADD CONSTRAINT.
--- 2022-12-03  MJV FIX: Handle NULL condition for ENUMs
--- 2022-12-07  MJV FIX: not setting tablespace correctly for user defined tablespaces
+-- 2022-09-19  MJV FIX: Do not add CREATE INDEX statements if the indexes are defined within the table definition as ADD CONSTRAINT.
+-- 2022-12-03  MJV FIX: Handle NULL condition for ENUMs.
+-- 2022-12-07  MJV FIX: Handle setting tablespace correctly for user-defined tablespaces.
 do $$ 
 <<first_block>>
 DECLARE
