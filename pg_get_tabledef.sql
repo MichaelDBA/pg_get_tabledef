@@ -1,7 +1,3 @@
--- Change History:
--- 2022-09-19  MJV FIX: Do not add CREATE INDEX statements if they indexes are defined within the Table definition as ADD CONSTRAINT.
--- 2022-12-03  MJV FIX: Handle NULL condition for ENUMs
--- 2022-12-07  MJV FIX: not setting tablespace correctly for user defined tablespaces
 do $$ 
 <<first_block>>
 DECLARE
@@ -15,16 +11,16 @@ BEGIN
   AND pg_catalog.format_type(t.oid, NULL) in ('tabledefs');
   IF cnt = 0 THEN
     RAISE INFO 'Creating custom types.';
-    -- CREATE TYPE public.tabledef_fkeys AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE');
-    -- CREATE TYPE public.tabledef_trigs AS ENUM ('INCLUDE_TRIGGERS', 'NO_TRIGGERS');
-	CREATE TYPE public.tabledefs AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
+	  CREATE TYPE public.tabledefs AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
   END IF;
 end first_block $$;
 
+-- DROP FUNCTION public.pg_get_coldef(text,text,text,boolean);
 CREATE OR REPLACE FUNCTION public.pg_get_coldef(
   in_schema text,
   in_table text,
-  in_column text
+  in_column text,
+  oldway boolean default False
 )
 RETURNS text
 LANGUAGE plpgsql VOLATILE
@@ -33,9 +29,17 @@ $$
 DECLARE
 coldef text;
 BEGIN
-  SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) INTO coldef FROM pg_namespace n, pg_class c, pg_attribute a, pg_type t 
-  WHERE n.nspname = in_schema AND n.oid = c.relnamespace AND c.relname = in_table AND a.attname = in_column and a.attnum > 0 AND a.attrelid = c.oid AND a.atttypid = t.oid ORDER BY a.attnum;
-  
+  IF oldway THEN 
+    SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) INTO coldef FROM pg_namespace n, pg_class c, pg_attribute a, pg_type t 
+    WHERE n.nspname = in_schema AND n.oid = c.relnamespace AND c.relname = in_table AND a.attname = in_column and a.attnum > 0 AND a.attrelid = c.oid AND a.atttypid = t.oid ORDER BY a.attnum;
+  ELSE
+    -- a.attrelid::regclass::text, a.attname
+    SELECT CASE WHEN a.atttypid = ANY ('{int,int8,int2}'::regtype[]) AND EXISTS (SELECT FROM pg_attrdef ad WHERE ad.adrelid = a.attrelid AND ad.adnum   = a.attnum AND 
+	  pg_get_expr(ad.adbin, ad.adrelid) = 'nextval(''' || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass || '''::regclass)') THEN CASE a.atttypid 
+	  WHEN 'int'::regtype  THEN 'serial' WHEN 'int8'::regtype THEN 'bigserial' WHEN 'int2'::regtype THEN 'smallserial' END ELSE format_type(a.atttypid, a.atttypmod) END AS data_type  
+	  INTO coldef FROM pg_namespace n, pg_class c, pg_attribute a, pg_type t 
+	  WHERE n.nspname = in_schema AND n.oid = c.relnamespace AND c.relname = in_table AND a.attname = in_column and a.attnum > 0 AND a.attrelid = c.oid AND a.atttypid = t.oid ORDER BY a.attnum;
+  END IF;
   RETURN coldef;
 END;
 $$;
@@ -82,9 +86,17 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2021-03-22   Added tablespace logic for tables and indexes.
 -- 2021-03-24   Added inheritance-based partitioning support for PG 9.6 and lower.
 -- 2022-09-12   Fixed Issue#1: Added fix for PostGIS columns where we do not presume the schema, leave without schema to imply public schema
+-- 2022-09-19   Fixed Issue#2: Do not add CREATE INDEX statements if the indexes are defined within the Table definition as ADD CONSTRAINT.
+-- 2022-12-03   Fixed: Handle NULL condition for ENUMs
+-- 2022-12-07   Fixed: not setting tablespace correctly for user defined tablespaces
 -- 2023-04-12   Fixed Issue#6: Handle array types: int, bigint, varchar, even varchars with precisions.
 -- 2023-04-13   Fixed Issue#7: Incomplete fixing of issue#6
+-- 2023-04-21   Fixed Issue#8: previously returns actual sequence info (aka \d) instead of serial/bigserial def.
+-- 2023-04-21   Fixed Issue#10: Consolidated comments into one place under function prototype heading.
+
+
   DECLARE
+    v_qualified text;
     v_table_ddl text;
     v_table_oid int;
     v_colrec record;
@@ -102,22 +114,23 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     v_relopts text;
     v_tablespace text;
     v_pgversion int;
+    bSerial boolean;
     bPartition boolean;
     bInheritance boolean;
     bRelispartition boolean;
     constraintarr text[] := '{}';
     constraintelement text;
     bSkip boolean;
-	bVerbose boolean := False;
+	  bVerbose boolean := False;
 
     -- assume defaults for ENUMs at the getgo	
-	fkcnt            int := 0;
-	trigcnt          int := 0;
+	  fkcnt            int := 0;
+	  trigcnt          int := 0;
     fktype           public.tabledefs := 'FKEYS_INTERNAL';
     trigtype         public.tabledefs := 'NO_TRIGGERS';
     arglen           integer;
-	vargs            text;
-	avarg            public.tabledefs;
+	  vargs            text;
+	  avarg            public.tabledefs;
 
     -- exception variables
     v_ret            text;
@@ -129,6 +142,8 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     v_diag6          text;
 	
   BEGIN
+    v_qualified = in_schema || '.' || in_table;
+  
     IF _verbose THEN bVerbose = True; END IF;
 	
     arglen := array_length($4, 1);
@@ -253,23 +268,31 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         SELECT c.column_name, c.data_type, c.udt_name, c.character_maximum_length, c.is_nullable, c.column_default, c.numeric_precision, c.numeric_scale, c.is_identity, c.identity_generation        
         FROM information_schema.columns c WHERE (table_schema, table_name) = (in_schema, in_table) ORDER BY ordinal_position
       LOOP
-         --Issue#6 fix: handle arrays
+         SELECT CASE WHEN pg_get_serial_sequence(v_qualified, v_colrec.column_name) IS NOT NULL THEN True ELSE False END into bSerial;
+         IF bVerbose THEN
+           SELECT pg_get_serial_sequence(v_qualified, v_colrec.column_name) into v_temp;
+           IF v_temp IS NULL THEN v_temp = 'NA'; END IF;
+           SELECT public.pg_get_coldef(in_schema, in_table,v_colrec.column_name) INTO v_diag1;
+           RAISE NOTICE 'DEBUG table: %  Column: %  datatype: %  Serial=%  serialval=%  coldef=%', v_qualified, v_colrec.column_name, v_colrec.data_type, bSerial, v_temp, v_diag1;
+           RAISE NOTICE 'DEBUG tabledef: %', v_table_ddl;
+         END IF;
+         
          v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
-          || v_colrec.column_name || ' '
-          -- || CASE WHEN v_colrec.data_type = 'USER-DEFINED' THEN in_schema || '.' || v_colrec.udt_name ELSE v_colrec.data_type END 
-          || CASE WHEN v_colrec.udt_name in ('geometry', 'box2d', 'box2df', 'box3d', 'geography', 'geometry_dump', 'gidx', 'spheroid', 'valid_detail')
+          || v_colrec.column_name || ' ' || 
+         CASE WHEN v_colrec.udt_name in ('geometry', 'box2d', 'box2df', 'box3d', 'geography', 'geometry_dump', 'gidx', 'spheroid', 'valid_detail')
 		     THEN v_colrec.udt_name WHEN v_colrec.data_type = 'USER-DEFINED' THEN in_schema || '.' || v_colrec.udt_name 
-		     WHEN v_colrec.data_type = 'ARRAY' THEN pg_get_coldef(in_schema, in_table,v_colrec.column_name) 
-		     -- WHEN v_colrec.data_type = 'ARRAY' THEN CASE WHEN v_colrec.udt_name = '_int4' THEN 'int[]' WHEN v_colrec.udt_name = '_int8' THEN 'bigint[]' 
-		     -- WHEN v_colrec.udt_name = '_varchar[]' THEN 'character varying[]' ELSE v_colrec.udt_name || '[]' END 
+		     -- Issue#6 fix: handle arrays
+		     WHEN v_colrec.data_type = 'ARRAY' THEN public.pg_get_coldef(in_schema, in_table,v_colrec.column_name) 
+		     -- Issue#8 fix: handle serial. Note: NOT NULL is implied so no need to declare it explicitly
+		     WHEN pg_get_serial_sequence(v_qualified, v_colrec.column_name) IS NOT NULL THEN public.pg_get_coldef(in_schema, in_table,v_colrec.column_name)  
 		     ELSE v_colrec.data_type END 
-          || CASE WHEN v_colrec.is_identity = 'YES' THEN CASE WHEN v_colrec.identity_generation = 'ALWAYS' THEN ' GENERATED ALWAYS AS IDENTITY' ELSE ' GENERATED BY DEFAULT AS IDENTITY' END ELSE '' END
-          || CASE WHEN v_colrec.character_maximum_length IS NOT NULL THEN ('(' || v_colrec.character_maximum_length || ')') 
-                  WHEN v_colrec.numeric_precision > 0 AND v_colrec.numeric_scale > 0 THEN '(' || v_colrec.numeric_precision || ',' || v_colrec.numeric_scale || ')' 
-             ELSE '' END || ' '
-          || CASE WHEN v_colrec.is_nullable = 'NO' THEN 'NOT NULL' ELSE 'NULL' END
-          || CASE WHEN v_colrec.column_default IS NOT null THEN (' DEFAULT ' || v_colrec.column_default) ELSE '' END
-          || ',' || E'\n';
+         || CASE WHEN v_colrec.is_identity = 'YES' THEN CASE WHEN v_colrec.identity_generation = 'ALWAYS' THEN ' GENERATED ALWAYS AS IDENTITY' ELSE ' GENERATED BY DEFAULT AS IDENTITY' END ELSE '' END
+         || CASE WHEN v_colrec.character_maximum_length IS NOT NULL THEN ('(' || v_colrec.character_maximum_length || ')') 
+                 WHEN v_colrec.numeric_precision > 0 AND v_colrec.numeric_scale > 0 THEN '(' || v_colrec.numeric_precision || ',' || v_colrec.numeric_scale || ')' 
+                 ELSE '' END || ' '
+		     || CASE WHEN bSerial THEN '' ELSE CASE WHEN v_colrec.is_nullable = 'NO' THEN 'NOT NULL' ELSE 'NULL' END END 
+         || CASE WHEN bSerial THEN '' ELSE CASE WHEN v_colrec.column_default IS NOT null THEN (' DEFAULT ' || v_colrec.column_default) ELSE '' END END 
+         || ',' || E'\n';
       END LOOP;
     END IF;
     IF bVerbose THEN RAISE INFO '(2)tabledef so far: %', v_table_ddl; END IF;
