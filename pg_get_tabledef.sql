@@ -409,13 +409,24 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     -- Handle external foreign key defs here if applicable. 
     IF fktype = 'FKEYS_EXTERNAL' THEN
       -- Issue#13 fix here too for conparentid = 0. and had to change to a loop to handle multiple return set, not a select into variable syntax.
-      FOR v_constraintrec IN
-      SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' as fkeydef
-      FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table and r.conparentid = 0
-      LOOP
-        v_table_ddl := v_table_ddl || v_constraintrec.fkeydef || E'\n';
-        IF bVerbose THEN RAISE INFO 'keydef = %', v_constraintrec.fkeydef; END IF;
-      END LOOP;            
+      -- Also had to account for PG V10 where there is no conparentid
+      IF v_pgversion < 110000
+        FOR v_constraintrec IN
+        SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' as fkeydef
+        FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table 
+        LOOP
+          v_table_ddl := v_table_ddl || v_constraintrec.fkeydef || E'\n';
+          IF bVerbose THEN RAISE INFO 'keydef = %', v_constraintrec.fkeydef; END IF;
+        END LOOP;            
+      ELSE
+        FOR v_constraintrec IN
+        SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' as fkeydef
+        FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table and r.conparentid = 0
+        LOOP
+          v_table_ddl := v_table_ddl || v_constraintrec.fkeydef || E'\n';
+          IF bVerbose THEN RAISE INFO 'keydef = %', v_constraintrec.fkeydef; END IF;
+        END LOOP;            
+      END IF;
       
     ELSIF  fktype = 'FKEYS_COMMENTED' THEN 
       SELECT '-- ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' into v_fkey_defs 
