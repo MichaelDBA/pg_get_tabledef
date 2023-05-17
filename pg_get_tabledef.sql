@@ -93,7 +93,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-04-13   Fixed Issue#7: Incomplete fixing of issue#6
 -- 2023-04-21   Fixed Issue#8: previously returns actual sequence info (aka \d) instead of serial/bigserial def.
 -- 2023-04-21   Fixed Issue#10: Consolidated comments into one place under function prototype heading.
-
+-- 2023-05-17   Fixed Issue#13: do not specify FKEY for partitions. It is done on the parent and implied on the partitions, else you get "fkey already exists" error
 
   DECLARE
     v_qualified text;
@@ -309,7 +309,10 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         END as type_rank,
         pg_get_constraintdef(con.oid) as constraint_definition
       FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-      WHERE nsp.nspname = in_schema AND rel.relname = in_table ORDER BY type_rank
+      WHERE nsp.nspname = in_schema AND rel.relname = in_table 
+            --Issue#13 added this condition:
+            AND con.conparentid = 0 
+            ORDER BY type_rank
     LOOP
       IF v_constraintrec.type_rank = 1 THEN
           v_primary := True;
