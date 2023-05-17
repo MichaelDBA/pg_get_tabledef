@@ -321,7 +321,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
             continue;
           END IF;
       END IF;
-      -- RAISE INFO 'DEBUG4: constraint name= %', v_constraintrec.constraint_name;    
+      if bVerbose THEN RAISE INFO 'DEBUG4: constraint name= %', v_constraintrec.constraint_name; END IF;
       constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
 
       IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
@@ -408,11 +408,15 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     
     -- Handle external foreign key defs here if applicable. 
     IF fktype = 'FKEYS_EXTERNAL' THEN
-      SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' into v_fkey_defs 
-      FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
-	  IF v_fkey_defs IS NOT NULL THEN
-          v_table_ddl := v_table_ddl || v_fkey_defs;
-	  END IF;
+      -- Issue#13 fix here too for conparentid = 0. and had to change to a loop to handle multiple return set, not a select into variable syntax.
+      FOR v_constraintrec IN
+      SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' as fkeydef
+      FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table and r.conparentid = 0
+      LOOP
+        v_table_ddl := v_table_ddl || v_constraintrec.fkeydef || E'\n';
+        IF bVerbose THEN RAISE INFO 'keydef = %', v_constraintrec.fkeydef; END IF;
+      END LOOP;            
+      
     ELSIF  fktype = 'FKEYS_COMMENTED' THEN 
       SELECT '-- ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' into v_fkey_defs 
       FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
