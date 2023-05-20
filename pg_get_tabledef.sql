@@ -298,7 +298,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     END IF;
     IF bVerbose THEN RAISE INFO '(2)tabledef so far: %', v_table_ddl; END IF;
     
-    -- define all the constraints\
+    -- define all the constraints: conparentid does not exist pre PGv11
     IF v_pgversion < 110000 THEN
       FOR v_constraintrec IN
         SELECT con.conname as constraint_name, con.contype as constraint_type,
