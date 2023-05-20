@@ -61,9 +61,9 @@ select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNA
 ## psql formatting
 You can avoid column headers and plus signs at the end of each line by specifying the **-At** parameters:
 
-psql mydatabase  -At
+psql mydatabase  **-At**
 <br/><br/>
-psql mydatabase  -At -c "select pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL')"
+psql mydatabase  **-At** -c "select pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL')"
 <br/><br/>
-or within a psql sesssion: \pset format unaligned
+or within a psql sesssion: **\pset format unaligned**
 
