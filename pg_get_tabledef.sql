@@ -94,6 +94,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-04-21   Fixed Issue#8: previously returns actual sequence info (aka \d) instead of serial/bigserial def.
 -- 2023-04-21   Fixed Issue#10: Consolidated comments into one place under function prototype heading.
 -- 2023-05-17   Fixed Issue#13: do not specify FKEY for partitions. It is done on the parent and implied on the partitions, else you get "fkey already exists" error
+-- 2023-05-20   Fixed syntax error, missing THEN keyword
 
   DECLARE
     v_qualified text;
@@ -297,43 +298,80 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     END IF;
     IF bVerbose THEN RAISE INFO '(2)tabledef so far: %', v_table_ddl; END IF;
     
-    -- define all the constraints
-    FOR v_constraintrec IN
-      SELECT con.conname as constraint_name, con.contype as constraint_type,
-        CASE
-          WHEN con.contype = 'p' THEN 1 -- primary key constraint
-          WHEN con.contype = 'u' THEN 2 -- unique constraint
-          WHEN con.contype = 'f' THEN 3 -- foreign key constraint
-          WHEN con.contype = 'c' THEN 4
-          ELSE 5
-        END as type_rank,
-        pg_get_constraintdef(con.oid) as constraint_definition
-      FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-      WHERE nsp.nspname = in_schema AND rel.relname = in_table 
-            --Issue#13 added this condition:
-            AND con.conparentid = 0 
-            ORDER BY type_rank
-    LOOP
-      IF v_constraintrec.type_rank = 1 THEN
-          v_primary := True;
-          v_constraint_name := v_constraintrec.constraint_name;
-          IF bPartition THEN
+    -- define all the constraints\
+    IF v_pgversion < 110000 THEN
+      FOR v_constraintrec IN
+        SELECT con.conname as constraint_name, con.contype as constraint_type,
+          CASE
+            WHEN con.contype = 'p' THEN 1 -- primary key constraint
+            WHEN con.contype = 'u' THEN 2 -- unique constraint
+            WHEN con.contype = 'f' THEN 3 -- foreign key constraint
+            WHEN con.contype = 'c' THEN 4
+            ELSE 5
+          END as type_rank,
+          pg_get_constraintdef(con.oid) as constraint_definition
+        FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+        WHERE nsp.nspname = in_schema AND rel.relname = in_table ORDER BY type_rank
+        LOOP
+        IF v_constraintrec.type_rank = 1 THEN
+            v_primary := True;
+            v_constraint_name := v_constraintrec.constraint_name;
+            IF bPartition THEN
+              continue;
+           END IF;
+        END IF;
+        if bVerbose THEN RAISE INFO 'DEBUG4: constraint name= %', v_constraintrec.constraint_name; END IF;
+        constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
+  
+        IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
             continue;
-          END IF;
-      END IF;
-      if bVerbose THEN RAISE INFO 'DEBUG4: constraint name= %', v_constraintrec.constraint_name; END IF;
-      constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
-
-      IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
-          continue;
-      END IF;
-
-      v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
-        || 'CONSTRAINT' || ' '
-        || v_constraintrec.constraint_name || ' '
-        || v_constraintrec.constraint_definition
-        || ',' || E'\n';
-    END LOOP;
+        END IF;
+  
+        v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
+          || 'CONSTRAINT' || ' '
+          || v_constraintrec.constraint_name || ' '
+          || v_constraintrec.constraint_definition
+          || ',' || E'\n';
+      END LOOP;
+    
+    ELSE
+      FOR v_constraintrec IN
+        SELECT con.conname as constraint_name, con.contype as constraint_type,
+          CASE
+            WHEN con.contype = 'p' THEN 1 -- primary key constraint
+            WHEN con.contype = 'u' THEN 2 -- unique constraint
+            WHEN con.contype = 'f' THEN 3 -- foreign key constraint
+            WHEN con.contype = 'c' THEN 4
+            ELSE 5
+          END as type_rank,
+          pg_get_constraintdef(con.oid) as constraint_definition
+        FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+        WHERE nsp.nspname = in_schema AND rel.relname = in_table 
+              --Issue#13 added this condition:
+              AND con.conparentid = 0 
+              ORDER BY type_rank
+        LOOP
+        IF v_constraintrec.type_rank = 1 THEN
+            v_primary := True;
+            v_constraint_name := v_constraintrec.constraint_name;
+            IF bPartition THEN
+              continue;
+           END IF;
+        END IF;
+        if bVerbose THEN RAISE INFO 'DEBUG4: constraint name= %', v_constraintrec.constraint_name; END IF;
+        constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
+  
+        IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
+            continue;
+        END IF;
+  
+        v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
+          || 'CONSTRAINT' || ' '
+          || v_constraintrec.constraint_name || ' '
+          || v_constraintrec.constraint_definition
+          || ',' || E'\n';
+      END LOOP;
+    END IF;      
     IF bVerbose THEN RAISE INFO '(3)tabledef so far: %', v_table_ddl; END IF;
 	
     -- drop the last comma before ending the create statement
@@ -410,12 +448,12 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     IF fktype = 'FKEYS_EXTERNAL' THEN
       -- Issue#13 fix here too for conparentid = 0. and had to change to a loop to handle multiple return set, not a select into variable syntax.
       -- Also had to account for PG V10 where there is no conparentid
-      IF v_pgversion < 110000
+      IF v_pgversion < 110000 THEN
         FOR v_constraintrec IN
         SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' as fkeydef
         FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table 
         LOOP
-          v_table_ddl := v_table_ddl || v_constraintrec.fkeydef || E'\n';
+          v_table_ddl := v_table_ddl || v_constraintrec.fkeydef || ';' || E'\n';
           IF bVerbose THEN RAISE INFO 'keydef = %', v_constraintrec.fkeydef; END IF;
         END LOOP;            
       ELSE
