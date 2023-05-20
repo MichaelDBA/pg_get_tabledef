@@ -95,6 +95,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-04-21   Fixed Issue#10: Consolidated comments into one place under function prototype heading.
 -- 2023-05-17   Fixed Issue#13: do not specify FKEY for partitions. It is done on the parent and implied on the partitions, else you get "fkey already exists" error
 -- 2023-05-20   Fixed syntax error, missing THEN keyword
+-- 2023-05-20   Fixed Issue#11: Handle parent of table being in another schema
 
   DECLARE
     v_qualified text;
@@ -110,6 +111,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     v_partition_key text := '';
     v_partbound text;
     v_parent text;
+    v_parent_schema text;
     v_persist text;
     v_temp  text := ''; 
     v_relopts text;
@@ -177,8 +179,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 	
     SELECT c.oid, (select setting from pg_settings where name = 'server_version_num') INTO v_table_oid, v_pgversion FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind in ('r','p') AND c.relname = in_table AND n.nspname = in_schema;
-    IF bVerbose THEN RAISE NOTICE 'version=%', v_pgversion; END IF;
-	
+    	
     -- throw an error if table was not found
     IF (v_table_oid IS NULL) THEN
       RAISE EXCEPTION 'table does not exist';
@@ -210,14 +211,16 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     bPartition := False;
     bInheritance := False;
     IF v_pgversion < 100000 THEN
-      SELECT c2.relname parent INTO v_parent from pg_class c1, pg_namespace n, pg_inherits i, pg_class c2
+      -- Issue#11: handle parent schema
+      SELECT c2.relname parent, c2.relnamespace::regnamespace INTO v_parent, v_parent_schema from pg_class c1, pg_namespace n, pg_inherits i, pg_class c2
       WHERE n.nspname = in_schema and n.oid = c1.relnamespace and c1.relname = in_table and c1.oid = i.inhrelid and i.inhparent = c2.oid and c1.relkind = 'r';      
       IF (v_parent IS NOT NULL) THEN
         bPartition   := True;
         bInheritance := True;
       END IF;
     ELSE
-      SELECT c2.relname parent, c1.relispartition, pg_get_expr(c1.relpartbound, c1.oid, true) INTO v_parent, bRelispartition, v_partbound from pg_class c1, pg_namespace n, pg_inherits i, pg_class c2
+      -- Issue#11: handle parent schema
+      SELECT c2.relname parent, c1.relispartition, pg_get_expr(c1.relpartbound, c1.oid, true), c2.relnamespace::regnamespace INTO v_parent, bRelispartition, v_partbound, v_parent_schema from pg_class c1, pg_namespace n, pg_inherits i, pg_class c2
       WHERE n.nspname = in_schema and n.oid = c1.relnamespace and c1.relname = in_table and c1.oid = i.inhrelid and i.inhparent = c2.oid and c1.relkind = 'r';
       IF (v_parent IS NOT NULL) THEN
         bPartition   := True;
@@ -228,7 +231,6 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         END IF;
       END IF;
     END IF;
-   
     IF bPartition THEN
       IF bInheritance THEN
         -- inheritance-based
@@ -274,8 +276,8 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
            SELECT pg_get_serial_sequence(v_qualified, v_colrec.column_name) into v_temp;
            IF v_temp IS NULL THEN v_temp = 'NA'; END IF;
            SELECT public.pg_get_coldef(in_schema, in_table,v_colrec.column_name) INTO v_diag1;
-           RAISE NOTICE 'DEBUG table: %  Column: %  datatype: %  Serial=%  serialval=%  coldef=%', v_qualified, v_colrec.column_name, v_colrec.data_type, bSerial, v_temp, v_diag1;
-           RAISE NOTICE 'DEBUG tabledef: %', v_table_ddl;
+           -- RAISE NOTICE 'DEBUG table: %  Column: %  datatype: %  Serial=%  serialval=%  coldef=%', v_qualified, v_colrec.column_name, v_colrec.data_type, bSerial, v_temp, v_diag1;
+           -- RAISE NOTICE 'DEBUG tabledef: %', v_table_ddl;
          END IF;
          
          v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
@@ -384,7 +386,10 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 
     -- See if this is an inheritance-based child table and finish up the table create.
     IF bPartition and bInheritance THEN
-      v_table_ddl := v_table_ddl || ') INHERITS (' || in_schema || '.' || v_parent || ') ' || E'\n' || v_relopts || ' ' || v_tablespace || ';' || E'\n';
+      -- Issue#11: handle parent schema
+      -- v_table_ddl := v_table_ddl || ') INHERITS (' || in_schema || '.' || v_parent || ') ' || E'\n' || v_relopts || ' ' || v_tablespace || ';' || E'\n';
+      IF v_parent_schema = '' OR v_parent_schema IS NULL THEN v_parent_schema = in_schema; END IF;
+      v_table_ddl := v_table_ddl || ') INHERITS (' || v_parent_schema || '.' || v_parent || ') ' || E'\n' || v_relopts || ' ' || v_tablespace || ';' || E'\n';
     END IF;
 
     IF v_pgversion >= 100000 AND NOT bPartition and NOT bInheritance THEN
