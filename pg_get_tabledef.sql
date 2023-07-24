@@ -11,7 +11,7 @@ BEGIN
   AND pg_catalog.format_type(t.oid, NULL) in ('tabledefs');
   IF cnt = 0 THEN
     RAISE INFO 'Creating custom types.';
-	  CREATE TYPE public.tabledefs AS ENUM ('FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
+	  CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
   END IF;
 end first_block $$;
 
@@ -45,7 +45,7 @@ END;
 $$;
 
 -- SELECT * FROM public.pg_get_tabledef('sample', 'address', false);
-DROP FUNCTION IF EXISTS pg_get_tabledef(character varying,character varying,boolean,tabledefs[]);
+DROP FUNCTION IF EXISTS public.pg_get_tabledef(character varying,character varying,boolean,tabledefs[]);
 CREATE OR REPLACE FUNCTION public.pg_get_tabledef(
   in_schema varchar,
   in_table varchar,
@@ -96,6 +96,8 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-05-17   Fixed Issue#13: do not specify FKEY for partitions. It is done on the parent and implied on the partitions, else you get "fkey already exists" error
 -- 2023-05-20   Fixed syntax error, missing THEN keyword
 -- 2023-05-20   Fixed Issue#11: Handle parent of table being in another schema
+-- 2023-07-24   Fixed Issue#14: If multiple triggers are defined on a table, show them all not just the first one.
+-- 2023-07-24   Added Allow user to specify PKEY externally (ALTER TABLE...) instead of defaulting to internal table def
 
   DECLARE
     v_qualified text;
@@ -103,6 +105,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     v_table_oid int;
     v_colrec record;
     v_constraintrec record;
+    v_trigrec       record;
     v_indexrec record;
     v_primary boolean := False;
     v_constraint_name text;
@@ -127,13 +130,15 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 	  bVerbose boolean := False;
 
     -- assume defaults for ENUMs at the getgo	
-	  fkcnt            int := 0;
+  	pkcnt            int := 0;
+  	fkcnt            int := 0;
 	  trigcnt          int := 0;
-    fktype           public.tabledefs := 'FKEYS_INTERNAL';
-    trigtype         public.tabledefs := 'NO_TRIGGERS';
+    pktype           tabledefs := 'PKEY_INTERNAL';	  
+    fktype           tabledefs := 'FKEYS_INTERNAL';
+    trigtype         tabledefs := 'NO_TRIGGERS';
     arglen           integer;
-	  vargs            text;
-	  avarg            public.tabledefs;
+  	vargs            text;
+	  avarg            tabledefs;
 
     -- exception variables
     v_ret            text;
@@ -166,14 +171,20 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
             ELSEIF avarg = 'INCLUDE_TRIGGERS' OR avarg = 'NO_TRIGGERS' THEN
                 trigcnt = trigcnt + 1;
                 trigtype = avarg;
+            ELSEIF avarg = 'PKEY_INTERNAL' OR avarg = 'PKEY_EXTERNAL' THEN
+                pkcnt = pkcnt + 1;
+                pktype = avarg;				
             END IF;
         END LOOP;
         IF fkcnt > 1 THEN 
-	    RAISE WARNING 'Only one foreign key option can be provided. You provided %', fkcnt;
-	    RETURN '';
+  	        RAISE WARNING 'Only one foreign key option can be provided. You provided %', fkcnt;
+	          RETURN '';
         ELSEIF trigcnt > 1 THEN 
             RAISE WARNING 'Only one trigger option can be provided. You provided %', trigcnt;
             RETURN '';
+        ELSEIF pkcnt > 1 THEN 
+            RAISE WARNING 'Only one pkey option can be provided. You provided %', pkcnt;
+            RETURN '';			
         END IF;		   		   
     END IF;
 	
@@ -481,15 +492,16 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     IF bVerbose THEN RAISE INFO '(7)tabledef so far: %', v_table_ddl; END IF;
 	
     IF trigtype = 'INCLUDE_TRIGGERS' THEN
-      select pg_get_triggerdef(t.oid, True) || ';' INTO v_trigger FROM pg_trigger t, pg_class c, pg_namespace n 
-      WHERE n.nspname = in_schema and n.oid = c.relnamespace and c.relname = in_table and c.relkind = 'r' and t.tgrelid = c.oid and NOT t.tgisinternal;
-      IF v_trigger <> '' THEN
-        v_table_ddl := v_table_ddl || v_trigger;
-      END IF;  
+	    -- Issue#14: handle multiple triggers for a table
+      FOR v_trigrec IN
+          select pg_get_triggerdef(t.oid, True) || ';' as triggerdef FROM pg_trigger t, pg_class c, pg_namespace n 
+          WHERE n.nspname = in_schema and n.oid = c.relnamespace and c.relname = in_table and c.relkind = 'r' and t.tgrelid = c.oid and NOT t.tgisinternal
+      LOOP
+          v_table_ddl := v_table_ddl || v_trigrec.triggerdef;
+          v_table_ddl := v_table_ddl || E'\n';          
+          IF bVerbose THEN RAISE INFO 'triggerdef = %', v_trigrec.triggerdef; END IF;
+      END LOOP;       	    
     END IF;
-  
-    -- add empty line
-    v_table_ddl := v_table_ddl || E'\n';
 
     RETURN v_table_ddl;
 	
