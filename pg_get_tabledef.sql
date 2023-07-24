@@ -97,7 +97,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-05-20   Fixed syntax error, missing THEN keyword
 -- 2023-05-20   Fixed Issue#11: Handle parent of table being in another schema
 -- 2023-07-24   Fixed Issue#14: If multiple triggers are defined on a table, show them all not just the first one.
--- 2023-07-24   Added Allow user to specify PKEY externally (ALTER TABLE...) instead of defaulting to internal table def
+-- 2023-07-??   work in progress... Add Allow user to specify PKEY externally (ALTER TABLE...) instead of defaulting to internal table def
 
   DECLARE
     v_qualified text;
