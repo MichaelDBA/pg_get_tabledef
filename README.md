@@ -18,7 +18,7 @@ I must give credits to some of the folks that provided code snippets that I used
 
 ## Limitations
 * No ACL information is returned.
-* Supports PG versions 9.6 through 16.
+* No support for PG Versions 9.5 and older.
 
 ## Overview
 This function handles these types of objects:
