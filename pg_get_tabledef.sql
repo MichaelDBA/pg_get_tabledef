@@ -1,5 +1,5 @@
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
-CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
+CREATE TYPE public.tabledefs AS ENUM ('PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
 
 -- DROP FUNCTION public.pg_get_coldef(text,text,text,boolean);
 CREATE OR REPLACE FUNCTION public.pg_get_coldef(
@@ -84,7 +84,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-05-20   Fixed Issue#11: Handle parent of table being in another schema
 -- 2023-07-24   Fixed Issue#14: If multiple triggers are defined on a table, show them all not just the first one.
 -- 2023-08-03   Fixed Issue#15: use utd_schema with USER-DEFINED data types, not defaulting to table schema.
--- 2023-??-??   work in progress... Add Allow user to specify PKEY externally (ALTER TABLE...) instead of defaulting to internal table def
+-- 2023-08-03   Fixed Issue#16: Make it optional to define the PKEY as external instead of internal.
 
   DECLARE
     v_qualified text;
@@ -96,6 +96,8 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     v_indexrec record;
     v_primary boolean := False;
     v_constraint_name text;
+    v_constraint_def  text;
+    v_pkey_def        text := '';
     v_fkey_defs text;
     v_trigger text := '';
     v_partition_key text := '';
@@ -120,7 +122,6 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
   	pkcnt            int := 0;
   	fkcnt            int := 0;
 	  trigcnt          int := 0;
-    pktype           tabledefs := 'PKEY_INTERNAL';	  
     fktype           tabledefs := 'FKEYS_INTERNAL';
     trigtype         tabledefs := 'NO_TRIGGERS';
     arglen           integer;
@@ -158,9 +159,8 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
             ELSEIF avarg = 'INCLUDE_TRIGGERS' OR avarg = 'NO_TRIGGERS' THEN
                 trigcnt = trigcnt + 1;
                 trigtype = avarg;
-            ELSEIF avarg = 'PKEY_INTERNAL' OR avarg = 'PKEY_EXTERNAL' THEN
+            ELSEIF avarg = 'PKEY_EXTERNAL' THEN
                 pkcnt = pkcnt + 1;
-                pktype = avarg;				
             END IF;
         END LOOP;
         IF fkcnt > 1 THEN 
@@ -320,23 +320,36 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         LOOP
         IF v_constraintrec.type_rank = 1 THEN
             v_primary := True;
-            v_constraint_name := v_constraintrec.constraint_name;
+            IF pkcnt = 0 THEN
+                v_constraint_name := v_constraintrec.constraint_name;
+                v_constraint_def  := v_constraintrec.constraint_definition;
+            ELSE
+              -- Issue#16 handle external PG def
+              v_constraint_name := v_constraintrec.constraint_name;
+              SELECT 'ALTER TABLE ONLY ' || c.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_pkey_def 
+              FROM pg_catalog.pg_constraint r, pg_class c, pg_namespace n where r.conrelid = c.oid and  r.contype = 'p' and n.oid = r.connamespace and n.nspname = in_schema AND c.relname = in_table;              
+            END IF;
             IF bPartition THEN
               continue;
-           END IF;
+            END IF;
+        ELSE
+            v_constraint_name := v_constraintrec.constraint_name;
+            v_constraint_def  := v_constraintrec.constraint_definition;
         END IF;
-        -- if bVerbose THEN RAISE INFO 'DEBUG4: constraint name= %', v_constraintrec.constraint_name; END IF;
+        if bVerbose THEN RAISE INFO 'DEBUG4: constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
         constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
   
         IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
             continue;
         END IF;
-  
-        v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
-          || 'CONSTRAINT' || ' '
-          || v_constraintrec.constraint_name || ' '
-          || v_constraintrec.constraint_definition
-          || ',' || E'\n';
+        
+        IF pkcnt = 0 THEN
+          v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
+            || 'CONSTRAINT' || ' '
+            || v_constraint_name || ' '
+            || v_constraint_def
+            || ',' || E'\n';
+        END IF;
       END LOOP;
     
     ELSE
@@ -358,23 +371,37 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         LOOP
         IF v_constraintrec.type_rank = 1 THEN
             v_primary := True;
-            v_constraint_name := v_constraintrec.constraint_name;
+            IF pkcnt = 0 THEN
+                v_constraint_name := v_constraintrec.constraint_name;
+                v_constraint_def  := v_constraintrec.constraint_definition;
+            ELSE
+              -- Issue#16 handle external PG def
+              v_constraint_name := v_constraintrec.constraint_name;
+              SELECT 'ALTER TABLE ONLY ' || c.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_pkey_def 
+              FROM pg_catalog.pg_constraint r, pg_class c, pg_namespace n where r.conrelid = c.oid and  r.contype = 'p' and n.oid = r.connamespace and n.nspname = in_schema AND c.relname = in_table;              
+            END IF;
             IF bPartition THEN
               continue;
-           END IF;
+            END IF;           
+        ELSE
+            v_constraint_name := v_constraintrec.constraint_name;
+            v_constraint_def  := v_constraintrec.constraint_definition;
         END IF;
-        -- if bVerbose THEN RAISE INFO 'DEBUG4: constraint name= %', v_constraintrec.constraint_name; END IF;
+        -- SELECT 'ALTER TABLE ONLY ' || c.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' as pkeyddl FROM pg_catalog.pg_constraint r, pg_class c, pg_namespace n where r.conrelid = c.oid and  r.contype = 'p' and n.oid = r.connamespace and n.nspname = 'sample' AND c.relname = 'extensions_table';
+        if bVerbose THEN RAISE INFO 'DEBUG4: constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
         constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
   
         IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
             continue;
         END IF;
   
-        v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
-          || 'CONSTRAINT' || ' '
-          || v_constraintrec.constraint_name || ' '
-          || v_constraintrec.constraint_definition
-          || ',' || E'\n';
+        IF pkcnt = 0 THEN
+          v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
+            || 'CONSTRAINT' || ' '
+            || v_constraint_name || ' '
+            || v_constraint_def
+            || ',' || E'\n';
+        END IF;
       END LOOP;
     END IF;      
     IF bVerbose THEN RAISE INFO '(3)tabledef so far: %', v_table_ddl; END IF;
@@ -420,6 +447,13 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     -- v_table_ddl := v_table_ddl || ') ' || v_relopts || ' ' || v_tablespace || E';\n';  
     -- END IF;
     -- RAISE NOTICE 'ddlsofar3: %', v_table_ddl;
+
+    -- Issue#16 create the external PKEY def if indicated
+    IF v_pkey_def <> '' THEN
+        v_table_ddl := v_table_ddl || v_pkey_def || E'\n';    
+    END IF;
+   
+    IF bVerbose THEN RAISE INFO '(6)tabledef so far: %', v_table_ddl; END IF;
    
     -- create indexes
     FOR v_indexrec IN
@@ -450,7 +484,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
       END IF;
       
     END LOOP;
-    IF bVerbose THEN RAISE INFO '(6)tabledef so far: %', v_table_ddl; END IF;
+    IF bVerbose THEN RAISE INFO '(7)tabledef so far: %', v_table_ddl; END IF;
     
     -- Handle external foreign key defs here if applicable. 
     IF fktype = 'FKEYS_EXTERNAL' THEN
@@ -481,7 +515,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
           v_table_ddl := v_table_ddl || v_fkey_defs;
       END IF;
     END IF;
-    IF bVerbose THEN RAISE INFO '(7)tabledef so far: %', v_table_ddl; END IF;
+    IF bVerbose THEN RAISE INFO '(8)tabledef so far: %', v_table_ddl; END IF;
 	
     IF trigtype = 'INCLUDE_TRIGGERS' THEN
 	    -- Issue#14: handle multiple triggers for a table
