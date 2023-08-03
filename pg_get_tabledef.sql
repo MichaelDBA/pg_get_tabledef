@@ -1,19 +1,5 @@
-do $$ 
-<<first_block>>
-DECLARE
-    cnt int;
-BEGIN
-  SELECT count(*) into cnt
-  FROM pg_catalog.pg_type t LEFT JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace WHERE (t.typrelid = 0 OR (SELECT c.relkind = 'c' FROM pg_catalog.pg_class c WHERE c.oid = t.typrelid)) 
-  AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_type el WHERE el.oid = t.typelem AND el.typarray = t.oid)
-  AND n.nspname <> 'pg_catalog' AND n.nspname <> 'information_schema' AND pg_catalog.pg_type_is_visible(t.oid)
-  -- AND pg_catalog.format_type(t.oid, NULL) in ('tabledef_fkeys','tabledef_trigs', 'tabledefs');
-  AND pg_catalog.format_type(t.oid, NULL) in ('tabledefs');
-  IF cnt = 0 THEN
-    RAISE INFO 'Creating custom types.';
-	  CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
-  END IF;
-end first_block $$;
+DROP TYPE IF EXISTS public.tabledefs CASCADE;
+CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
 
 -- DROP FUNCTION public.pg_get_coldef(text,text,text,boolean);
 CREATE OR REPLACE FUNCTION public.pg_get_coldef(
@@ -97,7 +83,8 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-05-20   Fixed syntax error, missing THEN keyword
 -- 2023-05-20   Fixed Issue#11: Handle parent of table being in another schema
 -- 2023-07-24   Fixed Issue#14: If multiple triggers are defined on a table, show them all not just the first one.
--- 2023-07-??   work in progress... Add Allow user to specify PKEY externally (ALTER TABLE...) instead of defaulting to internal table def
+-- 2023-08-03   Fixed Issue#15: use utd_schema with USER-DEFINED data types, not defaulting to table schema.
+-- 2023-??-??   work in progress... Add Allow user to specify PKEY externally (ALTER TABLE...) instead of defaulting to internal table def
 
   DECLARE
     v_qualified text;
@@ -279,26 +266,31 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     -- define all of the columns in the table unless we are in progress creating an inheritance-based child table
     IF NOT bPartition THEN
       FOR v_colrec IN
-        SELECT c.column_name, c.data_type, c.udt_name, c.character_maximum_length, c.is_nullable, c.column_default, c.numeric_precision, c.numeric_scale, c.is_identity, c.identity_generation        
+        SELECT c.column_name, c.data_type, c.udt_name, c.udt_schema, c.character_maximum_length, c.is_nullable, c.column_default, c.numeric_precision, c.numeric_scale, c.is_identity, c.identity_generation        
         FROM information_schema.columns c WHERE (table_schema, table_name) = (in_schema, in_table) ORDER BY ordinal_position
       LOOP
+         IF bVerbose THEN RAISE INFO '(col loop) name=% type=% udt_name=% udt_schema=%', v_colrec.column_name, v_colrec.data_type, v_colrec.udt_name, v_colrec.udt_schema; END IF;  
          SELECT CASE WHEN pg_get_serial_sequence(v_qualified, v_colrec.column_name) IS NOT NULL THEN True ELSE False END into bSerial;
          IF bVerbose THEN
            SELECT pg_get_serial_sequence(v_qualified, v_colrec.column_name) into v_temp;
            IF v_temp IS NULL THEN v_temp = 'NA'; END IF;
            SELECT public.pg_get_coldef(in_schema, in_table,v_colrec.column_name) INTO v_diag1;
-           -- RAISE NOTICE 'DEBUG table: %  Column: %  datatype: %  Serial=%  serialval=%  coldef=%', v_qualified, v_colrec.column_name, v_colrec.data_type, bSerial, v_temp, v_diag1;
-           -- RAISE NOTICE 'DEBUG tabledef: %', v_table_ddl;
+           --RAISE NOTICE 'DEBUG table: %  Column: %  datatype: %  Serial=%  serialval=%  coldef=%', v_qualified, v_colrec.column_name, v_colrec.data_type, bSerial, v_temp, v_diag1;
+           --RAISE NOTICE 'DEBUG tabledef: %', v_table_ddl;
          END IF;
          
          v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
           || v_colrec.column_name || ' ' || 
          CASE WHEN v_colrec.udt_name in ('geometry', 'box2d', 'box2df', 'box3d', 'geography', 'geometry_dump', 'gidx', 'spheroid', 'valid_detail')
-		     THEN v_colrec.udt_name WHEN v_colrec.data_type = 'USER-DEFINED' THEN in_schema || '.' || v_colrec.udt_name 
-		     -- Issue#6 fix: handle arrays
-		     WHEN v_colrec.data_type = 'ARRAY' THEN public.pg_get_coldef(in_schema, in_table,v_colrec.column_name) 
-		     -- Issue#8 fix: handle serial. Note: NOT NULL is implied so no need to declare it explicitly
-		     WHEN pg_get_serial_sequence(v_qualified, v_colrec.column_name) IS NOT NULL THEN public.pg_get_coldef(in_schema, in_table,v_colrec.column_name)  
+		       THEN v_colrec.udt_name 
+		     WHEN v_colrec.data_type = 'USER-DEFINED' 
+		       THEN v_colrec.udt_schema || '.' || v_colrec.udt_name 
+		     WHEN v_colrec.data_type = 'ARRAY' 
+   		     -- Issue#6 fix: handle arrays
+		       THEN public.pg_get_coldef(in_schema, in_table,v_colrec.column_name) 
+		     WHEN pg_get_serial_sequence(v_qualified, v_colrec.column_name) IS NOT NULL 
+		       -- Issue#8 fix: handle serial. Note: NOT NULL is implied so no need to declare it explicitly
+		       THEN public.pg_get_coldef(in_schema, in_table,v_colrec.column_name)  
 		     ELSE v_colrec.data_type END 
          || CASE WHEN v_colrec.is_identity = 'YES' THEN CASE WHEN v_colrec.identity_generation = 'ALWAYS' THEN ' GENERATED ALWAYS AS IDENTITY' ELSE ' GENERATED BY DEFAULT AS IDENTITY' END ELSE '' END
          || CASE WHEN v_colrec.character_maximum_length IS NOT NULL THEN ('(' || v_colrec.character_maximum_length || ')') 
@@ -502,6 +494,9 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
           IF bVerbose THEN RAISE INFO 'triggerdef = %', v_trigrec.triggerdef; END IF;
       END LOOP;       	    
     END IF;
+  
+    -- add empty line
+    v_table_ddl := v_table_ddl || E'\n';
 
     RETURN v_table_ddl;
 	
@@ -518,4 +513,3 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 
   END;
 $$;
-
