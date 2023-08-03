@@ -40,6 +40,7 @@ There are multiple ways to call this function where the differences are only rel
 <pre>verbose    Required: boolean - default=false, useful for debugging when set to True</pre>
 <pre>FKEY ENUM  Optional: Default=FKEYS_INTERNAL  Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'</pre>
 <pre>TRIG ENUM  Optional: Default=NO_TRIGGERS     Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'</pre>
+<pre>PKEY ENUM  Optional: Default=internal def    Enumeration: 'PKEY_EXTERNAL'</pre>
 
 With respect to the Foreign Key enumerations:
 <br/>
@@ -51,6 +52,8 @@ COMMENTED - EXTERNAL, commented out
 <br/><br/>
 ## Examples
 select * from public.pg_get_tabledef('myschema','mytable', false);
+<br/><br/>
+select * from public.pg_get_tabledef('myschema','mytable', false, 'PKEY_EXTERNAL');
 <br/><br/>
 select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL');
 <br/><br/>
