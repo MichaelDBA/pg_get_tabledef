@@ -33,7 +33,7 @@ This function handles these types of objects:
 * Partitioned tables including their partitions (declarative and inheritance-based)
 * Temporary and unlogged tables
 
-There are multiple ways to call this function where the differences are only related to whether Foreign Keys and/or Triggers are included and what format.  Here is a description of each parameter:
+There are multiple ways to call this function where the differences are mostly related to whether Foreign Keys and/or Triggers are included and what format.  Here is a description of each parameter:
 
 <pre>in_schema  Required: schema name</pre>
 <pre>in_table   Required: table name</pre>
