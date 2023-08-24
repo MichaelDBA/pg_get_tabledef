@@ -1,5 +1,5 @@
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
-CREATE TYPE public.tabledefs AS ENUM ('PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
+CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
 
 -- DROP FUNCTION public.pg_get_coldef(text,text,text,boolean);
 CREATE OR REPLACE FUNCTION public.pg_get_coldef(
@@ -86,6 +86,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-08-03   Fixed Issue#15: use utd_schema with USER-DEFINED data types, not defaulting to table schema.
 -- 2023-08-03   Fixed Issue#16: Make it optional to define the PKEY as external instead of internal.
 -- 2023-08-24   Fixed Issue#17: Handle case-sensitive tables
+-- 2023-xx-xx   Future enhancemart start for allowing external PK def
 
   DECLARE
     v_qualified text := '';
@@ -124,6 +125,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
   	pkcnt            int := 0;
   	fkcnt            int := 0;
 	  trigcnt          int := 0;
+    pktype           tabledefs := 'PKEY_INTERNAL';
     fktype           tabledefs := 'FKEYS_INTERNAL';
     trigtype         tabledefs := 'NO_TRIGGERS';
     arglen           integer;
@@ -140,11 +142,11 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     v_diag6          text;
 	
   BEGIN
+    SET client_min_messages = 'notice';
     IF _verbose THEN bVerbose = True; END IF;
     
     -- v17 fix: handle case-sensitive  
     -- v_qualified = in_schema || '.' || in_table;
- 
 	
     arglen := array_length($4, 1);
     IF arglen IS NULL THEN
@@ -165,6 +167,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
                 trigtype = avarg;
             ELSEIF avarg = 'PKEY_EXTERNAL' THEN
                 pkcnt = pkcnt + 1;
+                pktype = avarg;				                
             END IF;
         END LOOP;
         IF fkcnt > 1 THEN 
@@ -178,7 +181,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
             RETURN '';			
         END IF;		   		   
     END IF;
-	
+
     SELECT c.oid, (select setting from pg_settings where name = 'server_version_num') INTO v_table_oid, v_pgversion FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind in ('r','p') AND c.relname = in_table AND n.nspname = in_schema;
     	
