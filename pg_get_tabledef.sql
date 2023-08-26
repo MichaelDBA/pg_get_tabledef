@@ -85,7 +85,8 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-07-24   Fixed Issue#14: If multiple triggers are defined on a table, show them all not just the first one.
 -- 2023-08-03   Fixed Issue#15: use utd_schema with USER-DEFINED data types, not defaulting to table schema.
 -- 2023-08-03   Fixed Issue#16: Make it optional to define the PKEY as external instead of internal.
--- 2023-08-24   Fixed Issue#17: Handle case-sensitive tables
+-- 2023-08-24   Fixed Issue#17: Handle case-sensitive tables.
+-- 2023-08-26   Fixed Issue#17: Had to remove quote_ident when identifying case sensitive tables
 -- 2023-xx-xx   Future enhancemart start for allowing external PK def
 
   DECLARE
@@ -238,9 +239,10 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     END IF;
     IF bPartition THEN
       --v17 fix for case-sensitive tables
+		  -- SELECT count(*) INTO v_cnt FROM information_schema.tables t WHERE EXISTS (SELECT REGEXP_MATCHES(s.table_name, '([A-Z]+)','g') FROM information_schema.tables s 
+		  -- WHERE t.table_schema=s.table_schema AND t.table_name=s.table_name AND t.table_schema = quote_ident(in_schema) AND t.table_name = quote_ident(in_table) AND t.table_type = 'BASE TABLE');      
 		  SELECT count(*) INTO v_cnt FROM information_schema.tables t WHERE EXISTS (SELECT REGEXP_MATCHES(s.table_name, '([A-Z]+)','g') FROM information_schema.tables s 
-		  WHERE t.table_schema=s.table_schema AND t.table_name=s.table_name AND t.table_schema = quote_ident(in_schema) AND t.table_type = 'BASE TABLE');      
-    
+		  WHERE t.table_schema=s.table_schema AND t.table_name=s.table_name AND t.table_schema = in_schema AND t.table_name = in_table AND t.table_type = 'BASE TABLE');      		  
       IF bInheritance THEN
         -- inheritance-based
         IF v_cnt > 0 THEN
@@ -285,8 +287,10 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     -- start the create definition for regular tables unless we are in progress creating an inheritance-based child table
     IF NOT bPartition THEN
       --v17 fix for case-sensitive tables
+      -- SELECT count(*) INTO v_cnt FROM information_schema.tables t WHERE EXISTS (SELECT REGEXP_MATCHES(s.table_name, '([A-Z]+)','g') FROM information_schema.tables s 
+      -- WHERE t.table_schema=s.table_schema AND t.table_name=s.table_name AND t.table_schema = quote_ident(in_schema) AND t.table_name = quote_ident(in_table) AND t.table_type = 'BASE TABLE');   
       SELECT count(*) INTO v_cnt FROM information_schema.tables t WHERE EXISTS (SELECT REGEXP_MATCHES(s.table_name, '([A-Z]+)','g') FROM information_schema.tables s 
-      WHERE t.table_schema=s.table_schema AND t.table_name=s.table_name AND t.table_schema = quote_ident(in_schema) AND t.table_type = 'BASE TABLE');      
+      WHERE t.table_schema=s.table_schema AND t.table_name=s.table_name AND t.table_schema = in_schema AND t.table_name = in_table AND t.table_type = 'BASE TABLE');         
       IF v_cnt > 0 THEN
         v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || in_schema || '."' || in_table || '" (' || E'\n';
       ELSE
