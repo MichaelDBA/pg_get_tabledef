@@ -5,7 +5,7 @@
 <br/>
 GNU V3 and MIT licenses are conveyed accordingly.
 <br/>
-Bugs can be reported by creating an issue here, https://github.com/MichaelDBA/pg_get_tabledef/issues/new/choose.
+Bugs can be reported by creating an issue here.
 <br/>
 Please provide PG version and example code along with issues reported if possible.
 <br/>
