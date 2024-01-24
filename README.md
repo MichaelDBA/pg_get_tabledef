@@ -62,7 +62,7 @@ select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNA
 <br/><br/>
 select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL', 'INCLUDE_TRIGGERS');
 <br/><br/>
-select * from public.pg_get_tabledef('myschema','mytable', false, 'PKEY_EXTERNAL, 'FKEYS_EXTERNAL', 'COMMENTS', 'INCLUDE_TRIGGERS');
+select * from public.pg_get_tabledef('myschema','mytable', false, 'PKEY_EXTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'INCLUDE_TRIGGERS');
 <br/><br/>
 
 ## psql formatting
