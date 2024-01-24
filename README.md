@@ -1,7 +1,7 @@
 # pg_get_tabledef
 **pg_get_tabledef** is a PostgreSQL PL/PGSQL function that generates table DDL for the given schema/table.
 
-(c) 2021-2023 SQLEXEC LLC
+(c) 2021-2024 SQLEXEC LLC
 <br/>
 GNU V3 and MIT licenses are conveyed accordingly.
 <br/>
@@ -28,6 +28,7 @@ This function handles these types of objects:
 * SET and WITH clause storage parameters
 * check constraints
 * primary and foreign keys
+* table and column comments
 * indexes
 * tablespaces for tables and indexes
 * triggers (not trigger functions)
@@ -36,12 +37,13 @@ This function handles these types of objects:
 
 There are multiple ways to call this function where the differences are mostly related to whether Foreign Keys and/or Triggers are included and what format.  Here is a description of each parameter:
 
-<pre>in_schema  Required: schema name</pre>
-<pre>in_table   Required: table name</pre>
-<pre>verbose    Required: boolean - default=false, useful for debugging when set to True</pre>
-<pre>FKEY ENUM  Optional: Default=FKEYS_INTERNAL  Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'</pre>
-<pre>TRIG ENUM  Optional: Default=NO_TRIGGERS     Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'</pre>
-<pre>PKEY ENUM  Optional: Default=internal def    Enumeration: 'PKEY_EXTERNAL'</pre>
+<pre>in_schema      Required: schema name</pre>
+<pre>in_table       Required: table name</pre>
+<pre>verbose        Required: boolean - default=false, useful for debugging when set to True</pre>
+<pre>FKEY ENUM      Optional: Default=FKEYS_INTERNAL  Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'</pre>
+<pre>TRIG ENUM      Optional: Default=NO_TRIGGERS     Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'</pre>
+<pre>PKEY ENUM      Optional: Default=internal def    Enumeration: 'PKEY_EXTERNAL'</pre>
+<pre>COMMENTS ENUM  Optional: Default=no comments     Enumeration: 'COMMENTS'</pre>
 
 With respect to the Foreign Key enumerations:
 <br/>
@@ -59,6 +61,8 @@ select * from public.pg_get_tabledef('myschema','mytable', false, 'PKEY_EXTERNAL
 select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL');
 <br/><br/>
 select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL', 'INCLUDE_TRIGGERS');
+<br/><br/>
+select * from public.pg_get_tabledef('myschema','mytable', false, 'PKEY_EXTERNAL, 'FKEYS_EXTERNAL', 'COMMENTS', 'INCLUDE_TRIGGERS');
 <br/><br/>
 
 ## psql formatting
