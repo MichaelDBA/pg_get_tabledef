@@ -50,8 +50,6 @@ With respect to the Foreign Key enumerations:
 INTERNAL - part of table create statement
 <br/>
 EXTERNAL - ALTER TABLE ADD FOREIGN KEY statement
-<br/>
-COMMENTED - EXTERNAL, commented out
 <br/><br/>
 ## Examples
 select * from public.pg_get_tabledef('myschema','mytable', false);
