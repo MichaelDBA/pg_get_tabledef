@@ -389,7 +389,7 @@ $$
         v_constraint_name := v_constraintrec.constraint_name;
         v_constraint_def  := v_constraintrec.constraint_definition;
         IF v_constraintrec.type_rank = 1 THEN
-            IF pkcnt = 0 THEN
+            IF pkcnt = 0 OR pktype = 'PKEY_INTERNAL' THEN
                 -- internal def
                 v_constraint_name := v_constraintrec.constraint_name;
                 v_constraint_def  := v_constraintrec.constraint_definition;
@@ -408,7 +408,7 @@ $$
             END IF;
         ELSIF v_constraintrec.type_rank = 3 THEN
             -- handle foreign key constraints
-            IF fkcnt = 0 THEN
+            IF fkcnt = 0 OR fktype = 'FKEYS_INTERNAL' THEN
                 -- internal def
                 v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
                   || 'CONSTRAINT' || ' '
@@ -458,7 +458,7 @@ $$
         v_constraint_name := v_constraintrec.constraint_name;
         v_constraint_def  := v_constraintrec.constraint_definition;
         IF v_constraintrec.type_rank = 1 THEN
-            IF pkcnt = 0 THEN
+            IF pkcnt = 0 OR pktype = 'PKEY_INTERNAL' THEN
                 -- internal def
                 v_constraint_name := v_constraintrec.constraint_name;
                 v_constraint_def  := v_constraintrec.constraint_definition;
@@ -477,7 +477,7 @@ $$
             END IF;
         ELSIF v_constraintrec.type_rank = 3 THEN
             -- handle foreign key constraints
-            IF fkcnt = 0 THEN
+            IF fkcnt = 0 OR fktype = 'FKEYS_INTERNAL' THEN
                 -- internal def
                 v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
                   || 'CONSTRAINT' || ' '
