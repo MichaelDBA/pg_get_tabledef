@@ -1,50 +1,6 @@
-DROP TYPE IF EXISTS public.tabledefs CASCADE;
-CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
-
--- DROP FUNCTION public.pg_get_coldef(text,text,text,boolean);
-CREATE OR REPLACE FUNCTION public.pg_get_coldef(
-  in_schema text,
-  in_table text,
-  in_column text,
-  oldway boolean default False
-)
-RETURNS text
-LANGUAGE plpgsql VOLATILE
-AS
-$$
-DECLARE
-coldef text;
-BEGIN
-  IF oldway THEN 
-    SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) INTO coldef FROM pg_namespace n, pg_class c, pg_attribute a, pg_type t 
-    WHERE n.nspname = in_schema AND n.oid = c.relnamespace AND c.relname = in_table AND a.attname = in_column and a.attnum > 0 AND a.attrelid = c.oid AND a.atttypid = t.oid ORDER BY a.attnum;
-  ELSE
-    -- a.attrelid::regclass::text, a.attname
-    SELECT CASE WHEN a.atttypid = ANY ('{int,int8,int2}'::regtype[]) AND EXISTS (SELECT FROM pg_attrdef ad WHERE ad.adrelid = a.attrelid AND ad.adnum   = a.attnum AND 
-	  pg_get_expr(ad.adbin, ad.adrelid) = 'nextval(''' || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass || '''::regclass)') THEN CASE a.atttypid 
-	  WHEN 'int'::regtype  THEN 'serial' WHEN 'int8'::regtype THEN 'bigserial' WHEN 'int2'::regtype THEN 'smallserial' END ELSE format_type(a.atttypid, a.atttypmod) END AS data_type  
-	  INTO coldef FROM pg_namespace n, pg_class c, pg_attribute a, pg_type t 
-	  WHERE n.nspname = in_schema AND n.oid = c.relnamespace AND c.relname = in_table AND a.attname = in_column and a.attnum > 0 AND a.attrelid = c.oid AND a.atttypid = t.oid ORDER BY a.attnum;
-  END IF;
-  RETURN coldef;
-END;
-$$;
-
--- SELECT * FROM public.pg_get_tabledef('sample', 'address', false);
-DROP FUNCTION IF EXISTS public.pg_get_tabledef(character varying,character varying,boolean,tabledefs[]);
-CREATE OR REPLACE FUNCTION public.pg_get_tabledef(
-  in_schema varchar,
-  in_table varchar,
-  _verbose boolean,
-  VARIADIC arr public.tabledefs[] DEFAULT '{}':: public.tabledefs[]
-)
-RETURNS text
-LANGUAGE plpgsql VOLATILE
-AS
-$$
- /* ********************************************************************************
+/* ********************************************************************************
 COPYRIGHT NOTICE FOLLOWS.  DO NOT REMOVE
-Copyright (c) 2021-2023 SQLEXEC LLC
+Copyright (c) 2021-2024 SQLEXEC LLC
 
 Permission to use, copy, modify, and distribute this software and its documentation 
 for any purpose, without fee, and without a written agreement is hereby granted, 
@@ -88,8 +44,52 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-08-24   Fixed Issue#17: Handle case-sensitive tables.
 -- 2023-08-26   Fixed Issue#17: Had to remove quote_ident when identifying case sensitive tables
 -- 2023-08-28   Fixed Issue#19: Identified in pull request#18: double-quote reserved keywords
--- 2023-xx-xx   Future enhancemart start for allowing external PK def
+-- 2024-01-24   Fixed Issue#20: Handle output for specifying PKEY_EXTERNAL and FKEYS_EXTERNAL options, which misses all other non-primary constraints.
 
+DROP TYPE IF EXISTS public.tabledefs CASCADE;
+CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
+
+-- DROP FUNCTION public.pg_get_coldef(text,text,text,boolean);
+CREATE OR REPLACE FUNCTION public.pg_get_coldef(
+  in_schema text,
+  in_table text,
+  in_column text,
+  oldway boolean default False
+)
+RETURNS text
+LANGUAGE plpgsql VOLATILE
+AS
+$$
+DECLARE
+coldef text;
+BEGIN
+  IF oldway THEN 
+    SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) INTO coldef FROM pg_namespace n, pg_class c, pg_attribute a, pg_type t 
+    WHERE n.nspname = in_schema AND n.oid = c.relnamespace AND c.relname = in_table AND a.attname = in_column and a.attnum > 0 AND a.attrelid = c.oid AND a.atttypid = t.oid ORDER BY a.attnum;
+  ELSE
+    -- a.attrelid::regclass::text, a.attname
+    SELECT CASE WHEN a.atttypid = ANY ('{int,int8,int2}'::regtype[]) AND EXISTS (SELECT FROM pg_attrdef ad WHERE ad.adrelid = a.attrelid AND ad.adnum   = a.attnum AND 
+	  pg_get_expr(ad.adbin, ad.adrelid) = 'nextval(''' || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass || '''::regclass)') THEN CASE a.atttypid 
+	  WHEN 'int'::regtype  THEN 'serial' WHEN 'int8'::regtype THEN 'bigserial' WHEN 'int2'::regtype THEN 'smallserial' END ELSE format_type(a.atttypid, a.atttypmod) END AS data_type  
+	  INTO coldef FROM pg_namespace n, pg_class c, pg_attribute a, pg_type t 
+	  WHERE n.nspname = in_schema AND n.oid = c.relnamespace AND c.relname = in_table AND a.attname = in_column and a.attnum > 0 AND a.attrelid = c.oid AND a.atttypid = t.oid ORDER BY a.attnum;
+  END IF;
+  RETURN coldef;
+END;
+$$;
+
+-- SELECT * FROM public.pg_get_tabledef('sample', 'address', false);
+DROP FUNCTION IF EXISTS public.pg_get_tabledef(character varying,character varying,boolean,tabledefs[]);
+CREATE OR REPLACE FUNCTION public.pg_get_tabledef(
+  in_schema varchar,
+  in_table varchar,
+  _verbose boolean,
+  VARIADIC arr public.tabledefs[] DEFAULT '{}':: public.tabledefs[]
+)
+RETURNS text
+LANGUAGE plpgsql VOLATILE
+AS
+$$
   DECLARE
     v_qualified text := '';
     v_table_ddl text;
@@ -98,11 +98,12 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
     v_constraintrec record;
     v_trigrec       record;
     v_indexrec record;
-    v_primary boolean := False;
+    v_rec           record;
     v_constraint_name text;
     v_constraint_def  text;
     v_pkey_def        text := '';
-    v_fkey_defs text;
+    v_fkey_def        text := '';
+    v_fkey_defs       text := '';
     v_trigger text := '';
     v_partition_key text := '';
     v_partbound text;
@@ -128,6 +129,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
   	pkcnt            int := 0;
   	fkcnt            int := 0;
 	  trigcnt          int := 0;
+	  cmtcnt           int := 0;
     pktype           tabledefs := 'PKEY_INTERNAL';
     fktype           tabledefs := 'FKEYS_INTERNAL';
     trigtype         tabledefs := 'NO_TRIGGERS';
@@ -162,7 +164,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         IF bVerbose THEN RAISE NOTICE 'arguments=%', $4; END IF;
         FOREACH avarg IN ARRAY $4 LOOP
             IF bVerbose THEN RAISE INFO 'arg=%', avarg; END IF;
-            IF avarg = 'FKEYS_INTERNAL' OR avarg = 'FKEYS_EXTERNAL' OR avarg = 'FKEYS_COMMENTED' THEN
+            IF avarg = 'FKEYS_INTERNAL' OR avarg = 'FKEYS_EXTERNAL' THEN
                 fkcnt = fkcnt + 1;
                 fktype = avarg;
             ELSEIF avarg = 'INCLUDE_TRIGGERS' OR avarg = 'NO_TRIGGERS' THEN
@@ -171,6 +173,9 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
             ELSEIF avarg = 'PKEY_EXTERNAL' THEN
                 pkcnt = pkcnt + 1;
                 pktype = avarg;				                
+            ELSEIF avarg = 'COMMENTS' THEN
+                cmtcnt = cmtcnt + 1;
+                
             END IF;
         END LOOP;
         IF fkcnt > 1 THEN 
@@ -182,6 +187,10 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         ELSEIF pkcnt > 1 THEN 
             RAISE WARNING 'Only one pkey option can be provided. You provided %', pkcnt;
             RETURN '';			
+        ELSEIF cmtcnt > 1 THEN 
+            RAISE WARNING 'Only one comments option can be provided. You provided %', cmtcnt;
+            RETURN '';			
+            
         END IF;		   		   
     END IF;
 
@@ -376,24 +385,49 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
           pg_get_constraintdef(con.oid) as constraint_definition
         FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
         WHERE nsp.nspname = in_schema AND rel.relname = in_table ORDER BY type_rank
-        LOOP
+      LOOP
+        v_constraint_name := v_constraintrec.constraint_name;
+        v_constraint_def  := v_constraintrec.constraint_definition;
         IF v_constraintrec.type_rank = 1 THEN
-            v_primary := True;
             IF pkcnt = 0 THEN
+                -- internal def
                 v_constraint_name := v_constraintrec.constraint_name;
                 v_constraint_def  := v_constraintrec.constraint_definition;
+                v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
+                  || 'CONSTRAINT' || ' '
+                  || v_constraint_name || ' '
+                  || v_constraint_def
+                  || ',' || E'\n';
             ELSE
               -- Issue#16 handle external PG def
-              v_constraint_name := v_constraintrec.constraint_name;
               SELECT 'ALTER TABLE ONLY ' || in_schema || '.' || c.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_pkey_def 
               FROM pg_catalog.pg_constraint r, pg_class c, pg_namespace n where r.conrelid = c.oid and  r.contype = 'p' and n.oid = r.connamespace and n.nspname = in_schema AND c.relname = in_table;              
             END IF;
             IF bPartition THEN
               continue;
             END IF;
+        ELSIF v_constraintrec.type_rank = 3 THEN
+            -- handle foreign key constraints
+            IF fkcnt = 0 THEN
+                -- internal def
+                v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
+                  || 'CONSTRAINT' || ' '
+                  || v_constraint_name || ' '
+                  || v_constraint_def
+                  || ',' || E'\n';                
+            ELSE
+                -- external def
+                SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_fkey_def 
+  			        FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
+                v_fkey_defs = v_fkey_defs || v_fkey_def;
+            END IF;
         ELSE
-            v_constraint_name := v_constraintrec.constraint_name;
-            v_constraint_def  := v_constraintrec.constraint_definition;
+            -- handle all other constraints besides PKEY and FKEYS as internal defs by default
+            v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
+              || 'CONSTRAINT' || ' '
+              || v_constraint_name || ' '
+              || v_constraint_def
+              || ',' || E'\n';            
         END IF;
         if bVerbose THEN RAISE INFO 'DEBUG4: constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
         constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
@@ -401,17 +435,10 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
             continue;
         END IF;
-        
-        IF pkcnt = 0 THEN
-          v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
-            || 'CONSTRAINT' || ' '
-            || v_constraint_name || ' '
-            || v_constraint_def
-            || ',' || E'\n';
-        END IF;
       END LOOP;
-    
     ELSE
+      -- handle PG versions 11 and up
+      -- Issue#20: Fix logic for external PKEY and FKEYS
       FOR v_constraintrec IN
         SELECT con.conname as constraint_name, con.contype as constraint_type,
           CASE
@@ -427,41 +454,57 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
               --Issue#13 added this condition:
               AND con.conparentid = 0 
               ORDER BY type_rank
-        LOOP
+      LOOP
+        v_constraint_name := v_constraintrec.constraint_name;
+        v_constraint_def  := v_constraintrec.constraint_definition;
         IF v_constraintrec.type_rank = 1 THEN
-            v_primary := True;
             IF pkcnt = 0 THEN
+                -- internal def
                 v_constraint_name := v_constraintrec.constraint_name;
                 v_constraint_def  := v_constraintrec.constraint_definition;
+                v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
+                  || 'CONSTRAINT' || ' '
+                  || v_constraint_name || ' '
+                  || v_constraint_def
+                  || ',' || E'\n';
             ELSE
               -- Issue#16 handle external PG def
-              v_constraint_name := v_constraintrec.constraint_name;
               SELECT 'ALTER TABLE ONLY ' || in_schema || '.' || c.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_pkey_def 
               FROM pg_catalog.pg_constraint r, pg_class c, pg_namespace n where r.conrelid = c.oid and  r.contype = 'p' and n.oid = r.connamespace and n.nspname = in_schema AND c.relname = in_table;              
             END IF;
             IF bPartition THEN
               continue;
-            END IF;           
+            END IF;
+        ELSIF v_constraintrec.type_rank = 3 THEN
+            -- handle foreign key constraints
+            IF fkcnt = 0 THEN
+                -- internal def
+                v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
+                  || 'CONSTRAINT' || ' '
+                  || v_constraint_name || ' '
+                  || v_constraint_def
+                  || ',' || E'\n';                
+            ELSE
+                -- external def
+                SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_fkey_def 
+  			        FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table and r.conparentid = 0;
+                v_fkey_defs = v_fkey_defs || v_fkey_def;
+            END IF;
         ELSE
-            v_constraint_name := v_constraintrec.constraint_name;
-            v_constraint_def  := v_constraintrec.constraint_definition;
+            -- handle all other constraints besides PKEY and FKEYS as internal defs by default
+            v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
+              || 'CONSTRAINT' || ' '
+              || v_constraint_name || ' '
+              || v_constraint_def
+              || ',' || E'\n';            
         END IF;
-        -- SELECT 'ALTER TABLE ONLY ' || c.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' as pkeyddl FROM pg_catalog.pg_constraint r, pg_class c, pg_namespace n where r.conrelid = c.oid and  r.contype = 'p' and n.oid = r.connamespace and n.nspname = 'sample' AND c.relname = 'extensions_table';
         if bVerbose THEN RAISE INFO 'DEBUG4: constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
         constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
   
         IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
             continue;
         END IF;
-  
-        IF pkcnt = 0 THEN
-          v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
-            || 'CONSTRAINT' || ' '
-            || v_constraint_name || ' '
-            || v_constraint_def
-            || ',' || E'\n';
-        END IF;
-      END LOOP;
+       END LOOP;
     END IF;      
     IF bVerbose THEN RAISE INFO '(3)tabledef so far: %', v_table_ddl; END IF;
 	
@@ -512,6 +555,11 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
         v_table_ddl := v_table_ddl || v_pkey_def || E'\n';    
     END IF;
    
+    -- Issue#20
+    IF v_fkey_defs <> '' THEN
+	         v_table_ddl := v_table_ddl || v_fkey_defs || E'\n';    
+    END IF;
+   
     IF bVerbose THEN RAISE INFO '(6)tabledef so far: %', v_table_ddl; END IF;
    
     -- create indexes
@@ -544,35 +592,19 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
       
     END LOOP;
     IF bVerbose THEN RAISE INFO '(7)tabledef so far: %', v_table_ddl; END IF;
-    
-    -- Handle external foreign key defs here if applicable. 
-    IF fktype = 'FKEYS_EXTERNAL' THEN
-      -- Issue#13 fix here too for conparentid = 0. and had to change to a loop to handle multiple return set, not a select into variable syntax.
-      -- Also had to account for PG V10 where there is no conparentid
-      IF v_pgversion < 110000 THEN
-        FOR v_constraintrec IN
-        SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' as fkeydef
-        FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table 
+
+    -- Issue#20: added logic for table and column comments
+    IF  cmtcnt > 0 THEN 
+        FOR v_rec IN
+          SELECT c.relname, 'COMMENT ON ' || CASE WHEN c.relkind in ('r','p') AND a.attname IS NULL THEN 'TABLE ' WHEN c.relkind in ('r','p') AND a.attname IS NOT NULL THEN 'COLUMN ' WHEN c.relkind = 'f' THEN 'FOREIGN TABLE ' 
+                 WHEN c.relkind = 'm' THEN 'MATERIALIZED VIEW ' WHEN c.relkind = 'v' THEN 'VIEW ' WHEN c.relkind = 'i' THEN 'INDEX ' WHEN c.relkind = 'S' THEN 'SEQUENCE ' ELSE 'XX' END || n.nspname || '.' || 
+                 CASE WHEN c.relkind in ('r','p') AND a.attname IS NOT NULL THEN quote_ident(c.relname) || '.' || a.attname ELSE quote_ident(c.relname) END || ' IS '   || quote_literal(d.description) || ';' as ddl
+	   	    FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) LEFT JOIN pg_description d ON (c.oid = d.objoid) LEFT JOIN pg_attribute a ON (c.oid = a.attrelid AND a.attnum > 0 and a.attnum = d.objsubid)
+	   	    WHERE d.description IS NOT NULL AND n.nspname = in_schema AND c.relname = in_table ORDER BY 2 desc, ddl
         LOOP
-          v_table_ddl := v_table_ddl || v_constraintrec.fkeydef || ';' || E'\n';
-          IF bVerbose THEN RAISE INFO 'keydef = %', v_constraintrec.fkeydef; END IF;
-        END LOOP;            
-      ELSE
-        FOR v_constraintrec IN
-        SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' as fkeydef
-        FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table and r.conparentid = 0
-        LOOP
-          v_table_ddl := v_table_ddl || v_constraintrec.fkeydef || E'\n';
-          IF bVerbose THEN RAISE INFO 'keydef = %', v_constraintrec.fkeydef; END IF;
-        END LOOP;            
-      END IF;
-      
-    ELSIF  fktype = 'FKEYS_COMMENTED' THEN 
-      SELECT '-- ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' into v_fkey_defs 
-      FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
-	  IF v_fkey_defs IS NOT NULL THEN
-          v_table_ddl := v_table_ddl || v_fkey_defs;
-      END IF;
+            --RAISE INFO 'comments:%', v_rec.ddl;
+            v_table_ddl = v_table_ddl || v_rec.ddl || E'\n';
+        END LOOP;   
     END IF;
     IF bVerbose THEN RAISE INFO '(8)tabledef so far: %', v_table_ddl; END IF;
 	
