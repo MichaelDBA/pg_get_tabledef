@@ -44,7 +44,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-08-24   Fixed Issue#17: Handle case-sensitive tables.
 -- 2023-08-26   Fixed Issue#17: Had to remove quote_ident when identifying case sensitive tables
 -- 2023-08-28   Fixed Issue#19: Identified in pull request#18: double-quote reserved keywords
--- 2024-01-24   Fixed Issue#20: Handle output for specifying PKEY_EXTERNAL and FKEYS_EXTERNAL options, which misses all other non-primary constraints.
+-- 2024-01-25   Fixed Issue#20: Handle output for specifying PKEY_EXTERNAL and FKEYS_EXTERNAL options, which misses all other non-primary constraints.
 
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
 CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
@@ -401,7 +401,7 @@ $$
             ELSE
               -- Issue#16 handle external PG def
               SELECT 'ALTER TABLE ONLY ' || in_schema || '.' || c.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_pkey_def 
-              FROM pg_catalog.pg_constraint r, pg_class c, pg_namespace n where r.conrelid = c.oid and  r.contype = 'p' and n.oid = r.connamespace and n.nspname = in_schema AND c.relname = in_table;              
+              FROM pg_catalog.pg_constraint r, pg_class c, pg_namespace n where r.conrelid = c.oid and  r.contype = 'p' and n.oid = r.connamespace and n.nspname = in_schema AND c.relname = in_table and r.conname = v_constraint_name;             
             END IF;
             IF bPartition THEN
               continue;
@@ -419,7 +419,7 @@ $$
                 -- external def
                 SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_fkey_def 
   			        FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table;
-                v_fkey_defs = v_fkey_defs || v_fkey_def;
+                v_fkey_defs = v_fkey_defs || v_fkey_def || E'\n';
             END IF;
         ELSE
             -- handle all other constraints besides PKEY and FKEYS as internal defs by default
@@ -432,9 +432,6 @@ $$
         if bVerbose THEN RAISE INFO 'DEBUG4: constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
         constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
   
-        IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
-            continue;
-        END IF;
       END LOOP;
     ELSE
       -- handle PG versions 11 and up
@@ -487,8 +484,9 @@ $$
             ELSE
                 -- external def
                 SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_fkey_def 
-  			        FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table and r.conparentid = 0;
-                v_fkey_defs = v_fkey_defs || v_fkey_def;
+  			        FROM pg_constraint r, pg_class c1, pg_namespace n, pg_class c2 where r.conrelid = c1.oid and  r.contype = 'f' and n.nspname = in_schema and n.oid = r.connamespace and r.conrelid = c2.oid and c2.relname = in_table and 
+  			        r.conname = v_constraint_name and r.conparentid = 0;
+                v_fkey_defs = v_fkey_defs || v_fkey_def || E'\n';
             END IF;
         ELSE
             -- handle all other constraints besides PKEY and FKEYS as internal defs by default
@@ -501,9 +499,6 @@ $$
         if bVerbose THEN RAISE INFO 'DEBUG4: constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
         constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
   
-        IF fktype <> 'FKEYS_INTERNAL' AND v_constraintrec.constraint_type = 'f' THEN
-            continue;
-        END IF;
        END LOOP;
     END IF;      
     IF bVerbose THEN RAISE INFO '(3)tabledef so far: %', v_table_ddl; END IF;
