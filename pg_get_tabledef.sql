@@ -45,6 +45,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2023-08-26   Fixed Issue#17: Had to remove quote_ident when identifying case sensitive tables
 -- 2023-08-28   Fixed Issue#19: Identified in pull request#18: double-quote reserved keywords
 -- 2024-01-25   Fixed Issue#20: Handle output for specifying PKEY_EXTERNAL and FKEYS_EXTERNAL options, which misses all other non-primary constraints.
+-- 2024-02-18   Fixed Issue#22: Handle FKEYS_NONE input option, which was previously ignored.
 
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
 CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS');
@@ -164,7 +165,7 @@ $$
         IF bVerbose THEN RAISE NOTICE 'arguments=%', $4; END IF;
         FOREACH avarg IN ARRAY $4 LOOP
             IF bVerbose THEN RAISE INFO 'arg=%', avarg; END IF;
-            IF avarg = 'FKEYS_INTERNAL' OR avarg = 'FKEYS_EXTERNAL' THEN
+            IF avarg = 'FKEYS_INTERNAL' OR avarg = 'FKEYS_EXTERNAL' OR avarg = 'FKEYS_NONE' THEN
                 fkcnt = fkcnt + 1;
                 fktype = avarg;
             ELSEIF avarg = 'INCLUDE_TRIGGERS' OR avarg = 'NO_TRIGGERS' THEN
@@ -408,7 +409,11 @@ $$
             END IF;
         ELSIF v_constraintrec.type_rank = 3 THEN
             -- handle foreign key constraints
-            IF fkcnt = 0 OR fktype = 'FKEYS_INTERNAL' THEN
+            --Issue#22 fix: added FKEY_NONE check
+            IF fktype = 'FKEYS_NONE' THEN
+                -- skip
+                continue;
+            ELSIF fkcnt = 0 OR fktype = 'FKEYS_INTERNAL' THEN
                 -- internal def
                 v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
                   || 'CONSTRAINT' || ' '
@@ -474,7 +479,11 @@ $$
             END IF;
         ELSIF v_constraintrec.type_rank = 3 THEN
             -- handle foreign key constraints
-            IF fkcnt = 0 OR fktype = 'FKEYS_INTERNAL' THEN
+            --Issue#22 fix: added FKEY_NONE check
+            IF fktype = 'FKEYS_NONE' THEN
+                -- skip
+                continue;            
+            ELSIF fkcnt = 0 OR fktype = 'FKEYS_INTERNAL' THEN
                 -- internal def
                 v_table_ddl := v_table_ddl || '  ' -- note: two char spacer to start, to indent the column
                   || 'CONSTRAINT' || ' '
