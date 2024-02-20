@@ -15,7 +15,7 @@ Please provide PG version and example code along with issues reported if possibl
 <br/><br/>
 I must give credits to some of the folks that provided code snippets that I used when I started to work on this project.  Since that time I have added a lot more areas  that most closely mimics the output of **pg_dump**.  Here is that original reference: https://stackoverflow.com/questions/2593803/how-to-generate-the-create-table-sql-statement-for-an-existing-table-in-postgr
 <br/><br/>
-This function is also used in another github repo for cloning schemas: **https://github.com/denishpatel/pg-clone-schema**
+This function is also used in another github repo for cloning schemas: https://github.com/denishpatel/pg-clone-schema
 <br/>
 
 ## Limitations
