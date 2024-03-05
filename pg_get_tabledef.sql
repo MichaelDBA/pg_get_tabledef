@@ -196,7 +196,7 @@ $$
         -- select array_to_string($4, ',', '***') INTO vargs;
         IF bVerbose THEN RAISE NOTICE 'arguments=%', $4; END IF;
         FOREACH avarg IN ARRAY $4 LOOP
-            IF bVerbose THEN RAISE INFO 'arg=%', avarg; END IF;
+            IF bVerbose THEN RAISE NOTICE 'arg=%', avarg; END IF;
             IF avarg = 'FKEYS_INTERNAL' OR avarg = 'FKEYS_EXTERNAL' OR avarg = 'FKEYS_NONE' THEN
                 fkcnt = fkcnt + 1;
                 fktype = avarg;
@@ -236,10 +236,10 @@ $$
     SELECT REPLACE(REPLACE(setting, '"$user"', '$user'), '$user', '"$user"') INTO v_src_path_old
     FROM pg_settings
     WHERE name = 'search_path';
-    -- RAISE INFO 'DEBUG tableddl: saving old search_path: ***%***', v_src_path_old;
+    -- RAISE NOTICE 'DEBUG tableddl: saving old search_path: ***%***', v_src_path_old;
     EXECUTE 'SET search_path = "public"';
     SELECT setting INTO v_src_path_new FROM pg_settings WHERE name = 'search_path';
-    -- RAISE INFO 'DEBUG tableddl: using new search path=***%***', v_src_path_new;
+    -- RAISE NOTICE 'DEBUG tableddl: using new search path=***%***', v_src_path_new;
     
     -- throw an error if table was not found
     IF (v_table_oid IS NULL) THEN
@@ -331,7 +331,7 @@ $$
         -- Jump to constraints and index section to add the check constraints and indexes and perhaps FKeys
       END IF;
     END IF;
-	  IF bVerbose THEN RAISE INFO '(1)tabledef so far: %', v_table_ddl; END IF;
+	  IF bVerbose THEN RAISE NOTICE '(1)tabledef so far: %', v_table_ddl; END IF;
 
     IF NOT bPartition THEN
       -- see if this is unlogged or temporary table
@@ -358,14 +358,14 @@ $$
         v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || in_schema || '.' || in_table || ' (' || E'\n';
       END IF;
     END IF;
-    -- RAISE INFO 'DEBUG2: tabledef so far: %', v_table_ddl;    
+    -- RAISE NOTICE 'DEBUG2: tabledef so far: %', v_table_ddl;    
     -- define all of the columns in the table unless we are in progress creating an inheritance-based child table
     IF NOT bPartition THEN
       FOR v_colrec IN
         SELECT c.column_name, c.data_type, c.udt_name, c.udt_schema, c.character_maximum_length, c.is_nullable, c.column_default, c.numeric_precision, c.numeric_scale, c.is_identity, c.identity_generation, c.is_generated, c.generation_expression        
         FROM information_schema.columns c WHERE (table_schema, table_name) = (in_schema, in_table) ORDER BY ordinal_position
       LOOP
-         IF bVerbose THEN RAISE INFO '(col loop) name=%  type=%  udt_name=%  default=%  is_generated=%  gen_expr=%', v_colrec.column_name, v_colrec.data_type, v_colrec.udt_name, v_colrec.column_default, v_colrec.is_generated, v_colrec.generation_expression; END IF;  
+         IF bVerbose THEN RAISE NOTICE '(col loop) name=%  type=%  udt_name=%  default=%  is_generated=%  gen_expr=%', v_colrec.column_name, v_colrec.data_type, v_colrec.udt_name, v_colrec.column_default, v_colrec.is_generated, v_colrec.generation_expression; END IF;  
          
          -- v17 fix: handle case-sensitive for pg_get_serial_sequence that requires SQL Identifier handling
          -- SELECT CASE WHEN pg_get_serial_sequence(v_qualified, v_colrec.column_name) IS NOT NULL THEN True ELSE False END into bSerial;
@@ -438,7 +438,7 @@ $$
 
          -- Handle defaults
          IF v_colrec.column_default IS NOT null AND NOT bSerial THEN 
-             -- RAISE INFO 'Setting default for column, %', v_colrec.column_name;
+             -- RAISE NOTICE 'Setting default for column, %', v_colrec.column_name;
              v_temp = v_temp || (' DEFAULT ' || v_colrec.column_default);
          END IF;
          v_temp = v_temp || ',' || E'\n';
@@ -448,7 +448,7 @@ $$
 
       END LOOP;
     END IF;
-    IF bVerbose THEN RAISE INFO '(2)tabledef so far: %', v_table_ddl; END IF;
+    IF bVerbose THEN RAISE NOTICE '(2)tabledef so far: %', v_table_ddl; END IF;
         
     -- define all the constraints: conparentid does not exist pre PGv11
     IF v_pgversion < 110000 THEN
@@ -512,7 +512,7 @@ $$
               || v_constraint_def
               || ',' || E'\n';            
         END IF;
-        if bVerbose THEN RAISE INFO 'DEBUG4: constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
+        if bVerbose THEN RAISE NOTICE 'DEBUG4: constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
         constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
   
       END LOOP;
@@ -583,7 +583,7 @@ $$
               || v_constraint_def
               || ',' || E'\n';            
         END IF;
-        if bVerbose THEN RAISE INFO 'DEBUG4: constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
+        if bVerbose THEN RAISE NOTICE 'DEBUG4: constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
         constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
   
        END LOOP;
@@ -595,12 +595,12 @@ $$
     IF v_temp = ',' THEN
         v_table_ddl = substr(v_table_ddl, 0, length(v_table_ddl) - 1) || E'\n';
     END IF;
-    IF bVerbose THEN RAISE INFO '(3)tabledef so far: %', trim(v_table_ddl); END IF;
+    IF bVerbose THEN RAISE NOTICE '(3)tabledef so far: %', trim(v_table_ddl); END IF;
 
     -- ---------------------------------------------------------------------------
     -- at this point we have everything up to the last table-enclosing parenthesis
     -- ---------------------------------------------------------------------------
-    IF bVerbose THEN RAISE INFO '(4)tabledef so far: %', v_table_ddl; END IF;
+    IF bVerbose THEN RAISE NOTICE '(4)tabledef so far: %', v_table_ddl; END IF;
 
     -- See if this is an inheritance-based child table and finish up the table create.
     IF bPartition and bInheritance THEN
@@ -628,7 +628,7 @@ $$
       END IF;  
     END IF;
 
-    IF bVerbose THEN RAISE INFO '(5)tabledef so far: %', v_table_ddl; END IF;
+    IF bVerbose THEN RAISE NOTICE '(5)tabledef so far: %', v_table_ddl; END IF;
     
     -- Add closing paren for regular tables
     -- IF NOT bPartition THEN
@@ -646,19 +646,19 @@ $$
 	         v_table_ddl := v_table_ddl || v_fkey_defs || E'\n';    
     END IF;
    
-    IF bVerbose THEN RAISE INFO '(6)tabledef so far: %', v_table_ddl; END IF;
+    IF bVerbose THEN RAISE NOTICE '(6)tabledef so far: %', v_table_ddl; END IF;
    
     -- create indexes
     FOR v_indexrec IN
       SELECT indexdef, COALESCE(tablespace, 'pg_default') as tablespace, indexname FROM pg_indexes WHERE (schemaname, tablename) = (in_schema, in_table)
     LOOP
-      -- RAISE INFO 'DEBUG6: indexname=%  indexdef=%', v_indexrec.indexname, v_indexrec.indexdef;             
+      -- RAISE NOTICE 'DEBUG6: indexname=%  indexdef=%', v_indexrec.indexname, v_indexrec.indexdef;             
       -- loop through constraints and skip ones already defined
       bSkip = False;
       FOREACH constraintelement IN ARRAY constraintarr
       LOOP 
          IF constraintelement = v_indexrec.indexname THEN
-             -- RAISE INFO 'DEBUG7: skipping index, %', v_indexrec.indexname;
+             -- RAISE NOTICE 'DEBUG7: skipping index, %', v_indexrec.indexname;
              bSkip = True;
              EXIT;
          END IF;
@@ -667,7 +667,7 @@ $$
       
       -- Add IF NOT EXISTS clause so partition index additions will not be created if declarative partition in effect and index already created on parent
       v_indexrec.indexdef := REPLACE(v_indexrec.indexdef, 'CREATE INDEX', 'CREATE INDEX IF NOT EXISTS');
-      -- RAISE INFO 'DEBUG8: adding index, %', v_indexrec.indexname;
+      -- RAISE NOTICE 'DEBUG8: adding index, %', v_indexrec.indexname;
       
       -- NOTE:  cannot specify default tablespace for partitioned relations
       IF v_partition_key IS NOT NULL AND v_partition_key <> '' THEN
@@ -690,7 +690,7 @@ $$
       END IF;
       
     END LOOP;
-    IF bVerbose THEN RAISE INFO '(7)tabledef so far: %', v_table_ddl; END IF;
+    IF bVerbose THEN RAISE NOTICE '(7)tabledef so far: %', v_table_ddl; END IF;
 
     -- Issue#20: added logic for table and column comments
     IF  cmtcnt > 0 THEN 
@@ -701,11 +701,11 @@ $$
 	   	    FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) LEFT JOIN pg_description d ON (c.oid = d.objoid) LEFT JOIN pg_attribute a ON (c.oid = a.attrelid AND a.attnum > 0 and a.attnum = d.objsubid)
 	   	    WHERE d.description IS NOT NULL AND n.nspname = in_schema AND c.relname = in_table ORDER BY 2 desc, ddl
         LOOP
-            --RAISE INFO 'comments:%', v_rec.ddl;
+            --RAISE NOTICE 'comments:%', v_rec.ddl;
             v_table_ddl = v_table_ddl || v_rec.ddl || E'\n';
         END LOOP;   
     END IF;
-    IF bVerbose THEN RAISE INFO '(8)tabledef so far: %', v_table_ddl; END IF;
+    IF bVerbose THEN RAISE NOTICE '(8)tabledef so far: %', v_table_ddl; END IF;
 	
     IF trigtype = 'INCLUDE_TRIGGERS' THEN
 	    -- Issue#14: handle multiple triggers for a table
@@ -715,14 +715,14 @@ $$
       LOOP
           v_table_ddl := v_table_ddl || v_trigrec.triggerdef;
           v_table_ddl := v_table_ddl || E'\n';          
-          IF bVerbose THEN RAISE INFO 'triggerdef = %', v_trigrec.triggerdef; END IF;
+          IF bVerbose THEN RAISE NOTICE 'triggerdef = %', v_trigrec.triggerdef; END IF;
       END LOOP;       	    
     END IF;
   
-    IF bVerbose THEN RAISE INFO '(9)tabledef so far: %', v_table_ddl; END IF;
+    IF bVerbose THEN RAISE NOTICE '(9)tabledef so far: %', v_table_ddl; END IF;
     -- add empty line
     v_table_ddl := v_table_ddl || E'\n';
-    IF bVerbose THEN RAISE INFO '(10)tabledef so far: %', v_table_ddl; END IF;
+    IF bVerbose THEN RAISE NOTICE '(10)tabledef so far: %', v_table_ddl; END IF;
     
     -- reset search_path back to what it was
     IF v_src_path_old = '' THEN
