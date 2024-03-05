@@ -153,8 +153,8 @@ $$
 	  bVerbose boolean := False;
 	  v_cnt1   integer;
 	  v_cnt2   integer;
-	  v_src_path_old text := '';
-	  v_src_path_new text := '';
+	  search_path_old text := '';
+	  search_path_new text := '';
 	  v_partial    boolean;
 	  v_pos        integer;
 
@@ -231,15 +231,15 @@ $$
     WHERE c.relkind in ('r','p') AND c.relname = in_table AND n.nspname = in_schema;
 
    -- set search_path = public before we do anything to force explicit schema qualification but dont forget to set it back before exiting...
-    SELECT setting INTO v_src_path_old FROM pg_settings WHERE name = 'search_path';
+    SELECT setting INTO search_path_old FROM pg_settings WHERE name = 'search_path';
 
-    SELECT REPLACE(REPLACE(setting, '"$user"', '$user'), '$user', '"$user"') INTO v_src_path_old
+    SELECT REPLACE(REPLACE(setting, '"$user"', '$user'), '$user', '"$user"') INTO search_path_old
     FROM pg_settings
     WHERE name = 'search_path';
-    -- RAISE NOTICE 'DEBUG tableddl: saving old search_path: ***%***', v_src_path_old;
+    -- RAISE NOTICE 'DEBUG tableddl: saving old search_path: ***%***', search_path_old;
     EXECUTE 'SET search_path = "public"';
-    SELECT setting INTO v_src_path_new FROM pg_settings WHERE name = 'search_path';
-    -- RAISE NOTICE 'DEBUG tableddl: using new search path=***%***', v_src_path_new;
+    SELECT setting INTO search_path_new FROM pg_settings WHERE name = 'search_path';
+    -- RAISE NOTICE 'DEBUG tableddl: using new search path=***%***', search_path_new;
     
     -- throw an error if table was not found
     IF (v_table_oid IS NULL) THEN
@@ -725,10 +725,10 @@ $$
     IF bVerbose THEN RAISE NOTICE '(10)tabledef so far: %', v_table_ddl; END IF;
     
     -- reset search_path back to what it was
-    IF v_src_path_old = '' THEN
+    IF search_path_old = '' THEN
       SELECT set_config('search_path', '', false) into v_temp;
     ELSE
-      EXECUTE 'SET search_path = ' || v_src_path_old;
+      EXECUTE 'SET search_path = ' || search_path_old;
     END IF;
 
     RETURN v_table_ddl;
