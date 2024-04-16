@@ -65,6 +65,10 @@ select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNA
 select * from public.pg_get_tabledef('myschema','mytable', false, 'PKEY_EXTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'INCLUDE_TRIGGERS');
 <br/><br/>
 
+## Compare to pg_dump
+pg_dump -t 'myschema.mytable' --schema-only mydb | grep -v '\-\-' | grep -v -e '^[[:space:]]*$'
+<br/><br/>
+
 ## psql formatting
 You can avoid column headers and plus signs at the end of each line by specifying the **-At** parameters:
 
