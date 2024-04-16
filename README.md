@@ -64,6 +64,8 @@ select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNA
 <br/><br/>
 select * from public.pg_get_tabledef('myschema','mytable', false, 'PKEY_EXTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'INCLUDE_TRIGGERS');
 <br/><br/>
+psql clone_testing -c "select * from pg_get_tabledef('sample','emp',false,'COMMENTS','INCLUDE_TRIGGERS')"
+![image](https://github.com/MichaelDBA/pg_get_tabledef/assets/12436545/45e5bff3-e6a5-4893-80f5-1bdae25ebd28)
 
 ## Compare to pg_dump
 pg_dump -t 'myschema.mytable' --schema-only mydb | grep -v '\-\-' | grep -v -e '^[[:space:]]*$'
