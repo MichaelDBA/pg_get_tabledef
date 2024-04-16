@@ -70,6 +70,9 @@ psql clone_testing -c "select * from pg_get_tabledef('sample','emp',false,'COMME
 ## Compare to pg_dump
 pg_dump -t 'myschema.mytable' --schema-only mydb | grep -v '\-\-' | grep -v -e '^[[:space:]]*$'
 <br/><br/>
+pg_dump -t 'sample.emp' --schema-only clone_testing | grep -v '\-\-' | grep -v -e '^[[:space:]]*$'
+![image](https://github.com/MichaelDBA/pg_get_tabledef/assets/12436545/44e6beda-3707-4cf7-b401-96f45f2182e2)
+<br/><br/>
 
 ## psql formatting
 You can avoid column headers and plus signs at the end of each line by specifying the **-At** parameters:
