@@ -51,6 +51,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2024-03-05   Fixed Issue#25: Fix case where tablespace def occurs after the WHERE clause of a partial index creation.  It must occur BEFORE the WHERE clause.
 -- 2024-04-15   Fixed Issue#26: Fix case for partition table unique indexes by adding the IF NOT EXISTS phrase, which we already do for non-unique indexes
 -- 2024-09-11   Fixed Issue#28: Avoid duplication of NOT NULL for identity columns.
+-- 2024-09-18   Fixed Issue#29: work in progress...
 -- 2024-??-??   Fixed Issue#??: Distinguish between serial identity, and explicit sequences. NOT IMPLEMENTED YET
 
 
@@ -733,7 +734,9 @@ $$
     -- reset search_path back to what it was
     IF search_path_old = '' THEN
       SELECT set_config('search_path', '', false) into v_temp;
+      IF bVerbose THEN RAISE NOTICE 'SearchPath Cleanup: current searchpath=%', v_temp; END IF;
     ELSE
+      IF bVerbose THEN RAISE NOTICE 'SearchPath Cleanup: resetting searchpath=%', search_path_old; END IF;
       EXECUTE 'SET search_path = ' || search_path_old;
     END IF;
 
