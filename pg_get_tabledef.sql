@@ -51,7 +51,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2024-03-05   Fixed Issue#25: Fix case where tablespace def occurs after the WHERE clause of a partial index creation.  It must occur BEFORE the WHERE clause.
 -- 2024-04-15   Fixed Issue#26: Fix case for partition table unique indexes by adding the IF NOT EXISTS phrase, which we already do for non-unique indexes
 -- 2024-09-11   Fixed Issue#28: Avoid duplication of NOT NULL for identity columns.
--- 2024-09-18   Fixed Issue#29: work in progress...
+-- 2024-09-20   Fixed Issue#29: added verbose info for searchpath problems.
 -- 2024-??-??   Fixed Issue#??: Distinguish between serial identity, and explicit sequences. NOT IMPLEMENTED YET
 
 
@@ -146,6 +146,7 @@ $$
     v_relopts text;
     v_tablespace text;
     v_pgversion int;
+    v_context text := '';
     bSerial boolean;
     bPartition boolean;
     bInheritance boolean;
@@ -732,6 +733,8 @@ $$
     IF bVerbose THEN RAISE NOTICE '(10)tabledef so far: %', v_table_ddl; END IF;
     
     -- reset search_path back to what it was
+    -- Issue#29: add verbose info for searchpath stuff
+    v_context = 'SEARCHPATH';
     IF search_path_old = '' THEN
       SELECT set_config('search_path', '', false) into v_temp;
       IF bVerbose THEN RAISE NOTICE 'SearchPath Cleanup: current searchpath=%', v_temp; END IF;
@@ -747,9 +750,15 @@ $$
     BEGIN
       GET STACKED DIAGNOSTICS v_diag1 = MESSAGE_TEXT, v_diag2 = PG_EXCEPTION_DETAIL, v_diag3 = PG_EXCEPTION_HINT, v_diag4 = RETURNED_SQLSTATE, v_diag5 = PG_CONTEXT, v_diag6 = PG_EXCEPTION_CONTEXT;
       -- v_ret := 'line=' || v_diag6 || '. '|| v_diag4 || '. ' || v_diag1 || ' .' || v_diag2 || ' .' || v_diag3;
-      v_ret := 'line=' || v_diag6 || '. '|| v_diag4 || '. ' || v_diag1;
-      RAISE EXCEPTION '%', v_ret;
-      -- put additional coding here if necessarY
+
+      -- put additional coding here if necessary
+      IF v_context <> '' THEN
+          v_ret := 'line=' || v_diag6 || '. '|| v_diag4 || '. ' || v_diag1 || '  context=' || v_context;      
+          RAISE WARNING 'Search_path not reset correctly.  You may need to adjust it manually. %', v_ret;          
+      ELSE
+          v_ret := 'line=' || v_diag6 || '. '|| v_diag4 || '. ' || v_diag1;
+          RAISE EXCEPTION '%', v_ret;          
+      END IF;
        RETURN '';
     END;
 
