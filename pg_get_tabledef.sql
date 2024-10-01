@@ -52,7 +52,9 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2024-04-15   Fixed Issue#26: Fix case for partition table unique indexes by adding the IF NOT EXISTS phrase, which we already do for non-unique indexes
 -- 2024-09-11   Fixed Issue#28: Avoid duplication of NOT NULL for identity columns.
 -- 2024-09-20   Fixed Issue#29: added verbose info for searchpath problems.
+-- 2024-10-01   Fixed Issue#30: Fixed column def with geometry point defined - geometry geometry(Point, 4326) 
 -- 2024-??-??   Fixed Issue#??: Distinguish between serial identity, and explicit sequences. NOT IMPLEMENTED YET
+
 
 
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
@@ -401,7 +403,10 @@ $$
          IF v_colrec.is_generated = 'ALWAYS' and v_colrec.generation_expression IS NOT NULL THEN
              -- searchable tsvector GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, COALESCE(translate(email, '@.-'::citext, ' '::text), ''::text)) ) STORED
              v_temp = v_colrec.data_type || ' GENERATED ALWAYS AS (' || v_colrec.generation_expression || ') STORED ';
-         ELSEIF v_colrec.udt_name in ('geometry', 'box2d', 'box2df', 'box3d', 'geography', 'geometry_dump', 'gidx', 'spheroid', 'valid_detail') THEN
+         --Issue#30 fix handle geometries separately and use coldef func on it
+         ELSEIF v_colrec.udt_name in ('geometry') THEN
+             v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name);
+         ELSEIF v_colrec.udt_name in ('box2d', 'box2df', 'box3d', 'geography', 'geometry_dump', 'gidx', 'spheroid', 'valid_detail') THEN         
 		         v_temp = v_colrec.udt_name;
 		     ELSEIF v_colrec.data_type = 'USER-DEFINED' THEN
 		         v_temp = v_colrec.udt_schema || '.' || v_colrec.udt_name;
