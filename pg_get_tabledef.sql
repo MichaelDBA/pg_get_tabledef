@@ -53,8 +53,8 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2024-09-11   Fixed Issue#28: Avoid duplication of NOT NULL for identity columns.
 -- 2024-09-20   Fixed Issue#29: added verbose info for searchpath problems.
 -- 2024-10-01   Fixed Issue#30: Fixed column def with geometry point defined - geometry geometry(Point, 4326) 
+-- 2024-11-13   Fixed Issue#31: Case-sensitive schemas not handled correctly.
 -- 2024-??-??   Fixed Issue#??: Distinguish between serial identity, and explicit sequences. NOT IMPLEMENTED YET
-
 
 
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
@@ -124,6 +124,8 @@ LANGUAGE plpgsql VOLATILE
 AS
 $$
   DECLARE
+    v_schema    text := '';
+    v_coldef    text := '';
     v_qualified text := '';
     v_table_ddl text;
     v_table_oid int;
@@ -233,6 +235,10 @@ $$
         END IF;		   		   
     END IF;
 
+    -- Issue#31 - always handle case-sensitive schemas
+    v_schema = quote_ident(in_schema);
+    -- RAISE NOTICE 'DEBUG: schema qualified:%  before:%', v_schema, in_schema;
+
     SELECT c.oid, (select setting from pg_settings where name = 'server_version_num') INTO v_table_oid, v_pgversion FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind in ('r','p') AND c.relname = in_table AND n.nspname = in_schema;
 
@@ -249,8 +255,8 @@ $$
     
     -- throw an error if table was not found
     IF (v_table_oid IS NULL) THEN
-      RAISE EXCEPTION 'table does not exist';
-    END IF;
+      RAISE EXCEPTION 'schema(%) table(%) does not exist %', v_schema, in_table, v_schema || '.' || in_table;
+    END IF;    
 
     -- get user-defined tablespaces if applicable
     SELECT tablespace INTO v_temp FROM pg_tables WHERE schemaname = in_schema and tablename = in_table and tablespace IS NOT NULL;
@@ -313,9 +319,13 @@ $$
       IF bInheritance THEN
         -- inheritance-based
         IF v_cnt1 > 0 OR v_cnt2 > 0 THEN
-          v_table_ddl := 'CREATE TABLE ' || in_schema || '."' || in_table || '"( '|| E'\n';        
+          -- Issue#31 fix
+          -- v_table_ddl := 'CREATE TABLE ' || in_schema || '."' || in_table || '"( '|| E'\n';        
+          v_table_ddl := 'CREATE TABLE ' || v_schema || '."' || in_table || '"( '|| E'\n';        
         ELSE
-          v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || '( '|| E'\n';                
+          -- Issue#31 fix
+          -- v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || '( '|| E'\n';                
+          v_table_ddl := 'CREATE TABLE ' || v_schema || '.' || in_table || '( '|| E'\n';                
         END IF;
 
         -- Jump to constraints section to add the check constraints
@@ -323,15 +333,23 @@ $$
         -- declarative-based
         IF v_relopts <> '' THEN
           IF v_cnt1 > 0 OR v_cnt2 > 0 THEN
-            v_table_ddl := 'CREATE TABLE ' || in_schema || '."' || in_table || '" PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || E'\n';
+            -- Issue#31 fix
+            -- v_table_ddl := 'CREATE TABLE ' || in_schema || '."' || in_table || '" PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || E'\n';
+            v_table_ddl := 'CREATE TABLE ' || v_schema || '."' || in_table || '" PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || E'\n';
 				  ELSE
-				    v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || E'\n';
+				    -- Issue#31 fix
+				    -- v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || E'\n';
+				    v_table_ddl := 'CREATE TABLE ' || v_schema || '.' || in_table || ' PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || E'\n';
 				  END IF;
         ELSE
           IF v_cnt1 > 0 OR v_cnt2 > 0 THEN
-            v_table_ddl := 'CREATE TABLE ' || in_schema || '."' || in_table || '" PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || E'\n';
+            -- Issue#31 fix
+            -- v_table_ddl := 'CREATE TABLE ' || in_schema || '."' || in_table || '" PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || E'\n';
+            v_table_ddl := 'CREATE TABLE ' || v_schema || '."' || in_table || '" PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || E'\n';
 				  ELSE
-				    v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || E'\n';
+				    -- Issue#31 fix
+				    -- v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || E'\n';
+				    v_table_ddl := 'CREATE TABLE ' || v_schema || '.' || in_table || ' PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || E'\n';
 				  END IF;
         END IF;
         -- Jump to constraints and index section to add the check constraints and indexes and perhaps FKeys
@@ -359,9 +377,13 @@ $$
       SELECT count(*) INTO v_cnt1 FROM information_schema.tables t WHERE EXISTS (SELECT REGEXP_MATCHES(s.table_name, '([A-Z]+)','g') FROM information_schema.tables s 
       WHERE t.table_schema=s.table_schema AND t.table_name=s.table_name AND t.table_schema = in_schema AND t.table_name = in_table AND t.table_type = 'BASE TABLE');         
       IF v_cnt1 > 0 THEN
-        v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || in_schema || '."' || in_table || '" (' || E'\n';
+        -- Issue#31 fix
+        -- v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || in_schema || '."' || in_table || '" (' || E'\n';
+        v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || v_schema || '."' || in_table || '" (' || E'\n';
       ELSE
-        v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || in_schema || '.' || in_table || ' (' || E'\n';
+        -- Issue#31 fix
+        -- v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || in_schema || '.' || in_table || ' (' || E'\n';
+        v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || v_schema || '.' || in_table || ' (' || E'\n';
       END IF;
     END IF;
     -- RAISE NOTICE 'DEBUG2: tabledef so far: %', v_table_ddl;    
@@ -372,19 +394,17 @@ $$
         FROM information_schema.columns c WHERE (table_schema, table_name) = (in_schema, in_table) ORDER BY ordinal_position
       LOOP
          IF bVerbose THEN RAISE NOTICE '(col loop) name=%  type=%  udt_name=%  default=%  is_generated=%  gen_expr=%', v_colrec.column_name, v_colrec.data_type, v_colrec.udt_name, v_colrec.column_default, v_colrec.is_generated, v_colrec.generation_expression; END IF;  
-         
+         -- v17 fix: handle case-sensitive for pg_get_serial_sequence that requires SQL Identifier handling
+         -- SELECT pg_get_serial_sequence(v_qualified, v_colrec.column_name) into v_temp;
+         SELECT pg_get_serial_sequence(quote_ident(in_schema) || '.' || quote_ident(in_table), v_colrec.column_name) into v_temp;         
+         IF v_temp IS NULL THEN v_temp = 'NA'; END IF;
+         SELECT public.pg_get_coldef(in_schema, in_table,v_colrec.column_name) INTO v_coldef;         
+
          -- v17 fix: handle case-sensitive for pg_get_serial_sequence that requires SQL Identifier handling
          -- SELECT CASE WHEN pg_get_serial_sequence(v_qualified, v_colrec.column_name) IS NOT NULL THEN True ELSE False END into bSerial;
          SELECT CASE WHEN pg_get_serial_sequence(quote_ident(in_schema) || '.' || quote_ident(in_table), v_colrec.column_name) IS NOT NULL THEN True ELSE False END into bSerial;
-         IF bVerbose THEN
-           -- v17 fix: handle case-sensitive for pg_get_serial_sequence that requires SQL Identifier handling
-           -- SELECT pg_get_serial_sequence(v_qualified, v_colrec.column_name) into v_temp;
-           SELECT pg_get_serial_sequence(quote_ident(in_schema) || '.' || quote_ident(in_table), v_colrec.column_name) into v_temp;
-           IF v_temp IS NULL THEN v_temp = 'NA'; END IF;
-           SELECT public.pg_get_coldef(in_schema, in_table,v_colrec.column_name) INTO v_diag1;
-           RAISE NOTICE 'DEBUG table: %  Column: %  datatype: %  Serial=%  serialval=%  coldef=%', v_qualified, v_colrec.column_name, v_colrec.data_type, bSerial, v_temp, v_diag1;
-           RAISE NOTICE 'DEBUG tabledef: %', v_table_ddl;
-         END IF;
+         
+         IF bVerbose THEN RAISE NOTICE 'DEBUG table: %  Column: %  datatype: %  Serial=%  serialval=%  udtname=%  coldef=%', v_qualified, v_colrec.column_name, v_colrec.data_type, bSerial, v_temp, v_colrec.udt_name, v_coldef; END IF;
          
          --Issue#17 put double-quotes around case-sensitive column names
          SELECT COUNT(*) INTO v_cnt1 FROM information_schema.columns t WHERE EXISTS (SELECT REGEXP_MATCHES(s.column_name, '([A-Z]+)','g') FROM information_schema.columns s 
@@ -409,7 +429,9 @@ $$
          ELSEIF v_colrec.udt_name in ('box2d', 'box2df', 'box3d', 'geography', 'geometry_dump', 'gidx', 'spheroid', 'valid_detail') THEN         
 		         v_temp = v_colrec.udt_name;
 		     ELSEIF v_colrec.data_type = 'USER-DEFINED' THEN
-		         v_temp = v_colrec.udt_schema || '.' || v_colrec.udt_name;
+		         -- Issue#31 fix
+		         -- v_temp = v_colrec.udt_schema || '.' || v_colrec.udt_name;
+		         v_temp = quote_ident(v_colrec.udt_schema) || '.' || v_colrec.udt_name;
 		     ELSEIF v_colrec.data_type = 'ARRAY' THEN
    		       -- Issue#6 fix: handle arrays
 		         v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name);
@@ -419,7 +441,9 @@ $$
 		         -- Issue#8 fix: handle serial. Note: NOT NULL is implied so no need to declare it explicitly
 		         v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name);
 		     ELSE
-		         v_temp = v_colrec.data_type;
+		         -- Issue#31 fix
+		         -- v_temp = v_colrec.data_type;
+		         v_temp = v_coldef;
          END IF;
          -- RAISE NOTICE 'column def1=%', v_temp;
 
@@ -430,10 +454,11 @@ $$
 		         ELSE
 		             v_temp = v_temp || ' GENERATED BY DEFAULT AS IDENTITY NOT NULL';
 		         END IF;
-         ELSEIF v_colrec.character_maximum_length IS NOT NULL THEN 
-             v_temp = v_temp || ('(' || v_colrec.character_maximum_length || ')');
-         ELSEIF v_colrec.numeric_precision > 0 AND v_colrec.numeric_scale > 0 THEN 
-             v_temp = v_temp || '(' || v_colrec.numeric_precision || ',' || v_colrec.numeric_scale || ')';
+         -- Issue#31: no need to add stuff since we get the coldef definition now above		         
+         -- ELSEIF v_colrec.character_maximum_length IS NOT NULL THEN 
+         --     v_temp = v_temp || ('(' || v_colrec.character_maximum_length || ')');
+         -- ELSEIF v_colrec.numeric_precision > 0 AND v_colrec.numeric_scale > 0 THEN 
+         --     v_temp = v_temp || '(' || v_colrec.numeric_precision || ',' || v_colrec.numeric_scale || ')';
          END IF;
 
          -- Handle NULL/NOT NULL
@@ -456,7 +481,8 @@ $$
          -- RAISE NOTICE 'column def2=%', v_temp;
          v_table_ddl := v_table_ddl || v_temp;
          -- RAISE NOTICE 'tabledef=%', v_table_ddl;
-
+         
+         IF bVerbose THEN RAISE NOTICE 'DEBUG tabledef: %', v_table_ddl; END IF;
       END LOOP;
     END IF;
     IF bVerbose THEN RAISE NOTICE '(2)tabledef so far: %', v_table_ddl; END IF;
