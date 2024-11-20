@@ -54,7 +54,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2024-09-20   Fixed Issue#29: added verbose info for searchpath problems.
 -- 2024-10-01   Fixed Issue#30: Fixed column def with geometry point defined - geometry geometry(Point, 4326) 
 -- 2024-11-13   Fixed Issue#31: Case-sensitive schemas not handled correctly.
--- 2024-11-20   Fixed Issue#32: Show explicit sequence default output, not SERIAL types to emulate the way PG does it.
+-- 2024-11-20   Fixed Issue#32: Show explicit sequence default output, not SERIAL types to emulate the way PG does it. Also use dt2 (formatted), not dt1
 
 
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
@@ -131,7 +131,8 @@ BEGIN
     -- Issue#32 handled in calling routine, not here
  	  -- CREATE TABLE atable (key integer NOT NULL default nextval('explicitsequence_key'), avalue text);
 	  -- IF v_dfltexpr IS NULL OR v_dfltexpr = '' THEN
-    v_coldef = v_dt1;
+    -- v_coldef = v_dt1;
+    v_coldef = v_dt2;
 	  
   END IF;
   RETURN v_coldef;
@@ -480,6 +481,7 @@ $$
 		     ELSEIF pg_get_serial_sequence(quote_ident(in_schema) || '.' || quote_ident(in_table), v_colrec.column_name) IS NOT NULL THEN
 		         -- Issue#8 fix: handle serial. Note: NOT NULL is implied so no need to declare it explicitly
 		         v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name);
+         --ELSEIF (v_colrec.data_type = 'character varying' or v_colrec.udt_name = 'varchar') AND v_colrec.character_maximum_length IS NOT NULL THEN
 		     ELSE
 		         -- Issue#31 fix
 		         -- v_temp = v_colrec.data_type;
