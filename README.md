@@ -39,13 +39,14 @@ This function handles these types of objects:
 
 There are multiple ways to call this function where the differences are mostly related to whether Foreign Keys and/or Triggers are included and what format.  Here is a description of each parameter:
 
-<pre>in_schema      Required: schema name</pre>
-<pre>in_table       Required: table name</pre>
-<pre>verbose        Required: boolean - default=false, useful for debugging when set to True</pre>
-<pre>FKEY ENUM      Optional: Default=FKEYS_INTERNAL  Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'</pre>
-<pre>TRIG ENUM      Optional: Default=NO_TRIGGERS     Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'</pre>
-<pre>PKEY ENUM      Optional: Default=internal def    Enumeration: 'PKEY_EXTERNAL'</pre>
-<pre>COMMENTS ENUM  Optional: Default=no comments     Enumeration: 'COMMENTS'</pre>
+<pre>in_schema TEXT  Required: schema name</pre>
+<pre>in_table  TEXT  Required: table name</pre>
+<pre>verbose   BOOL  Required: Default=false,             useful for debugging when set to True</pre>
+<pre>FKEY      ENUM  Optional: Default=FKEYS_INTERNAL     Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'</pre>
+<pre>TRIG      ENUM  Optional: Default=NO_TRIGGERS        Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'</pre>
+<pre>PKEY      ENUM  Optional: Default=internal def       Enumeration: 'PKEY_EXTERNAL'</pre>
+<pre>COMMENTS  ENUM  Optional: Default=no comments        Enumeration: 'COMMENTS'</pre>
+<pre>SHOWPARTS ENUM  Optional: Default=no partition info  Enumeration: 'SHOWPARTS'</pre>
 
 With respect to the Foreign Key enumerations:
 <br/>
