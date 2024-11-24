@@ -47,6 +47,7 @@ There are multiple ways to call this function where the differences are mostly r
 <pre>PKEY      ENUM  Optional: Default=internal def       Enumeration: 'PKEY_EXTERNAL'</pre>
 <pre>COMMENTS  ENUM  Optional: Default=no comments        Enumeration: 'COMMENTS'</pre>
 <pre>SHOWPARTS ENUM  Optional: Default=no partition info  Enumeration: 'SHOWPARTS'</pre>
+<pre>OWNER_ACL ENUM  Optional: Default=no owner acl       Enumeration: 'OWNER_ACL'</pre>
 
 With respect to the Foreign Key enumerations:
 <br/>
