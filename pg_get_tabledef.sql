@@ -153,7 +153,7 @@ LANGUAGE plpgsql VOLATILE
 AS
 $$
   DECLARE
-    v_version        text := '1.10 November 20, 2024';
+    v_version        text := '1.11 November 24, 2024';
     v_schema    text := '';
     v_coldef    text := '';
     v_qualified text := '';
