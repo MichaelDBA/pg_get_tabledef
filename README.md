@@ -53,11 +53,13 @@ There are multiple ways to call this function where the differences are mostly r
 <pre>ACL_DCL      ENUM  Optional: Default=no grants/owner acls  Enumeration: 'ACL_DCL'</pre>
 <pre>ACL_POLICIES ENUM  Optional: Default=no policy acls        Enumeration: 'ACL_POLICIES'</pre>
 
-With respect to the Foreign Key enumerations:
+With respect to the Primary and Foreign Key enumerations:
 <br/>
 INTERNAL - part of table create statement
 <br/>
-EXTERNAL - ALTER TABLE ADD FOREIGN KEY statement
+EXTERNAL - ALTER TABLE ADD PRIMAMRY KEY/FOREIGN KEY statement
+<br/><br/>
+With regard to ACL parameters (new in version 2), ACL_DCL shows GRANT statements in addition to the ALTER TABLE statement for setting the owner which can be done separately as a single statement with ACL_OWNER.
 <br/><br/>
 ## Examples
 select * from public.pg_get_tabledef('myschema','mytable', false);
