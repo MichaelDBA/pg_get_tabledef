@@ -57,9 +57,10 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2024-11-20   Issue#32: Show explicit sequence default output, not SERIAL types to emulate the way PG does it. Also use dt2 (formatted), not dt1
 -- 2024-11-20   Issue#33: Show partition info for parent table if SHOWPARTS enumeration specified
 -- 2024-11-24   Issue#27: Add owner info if requested through 'OWNER_ACL' 
+-- 2024-11-25   Issue#35: Add option for all other ACLs for a table in addition to the owner, option='ALL_ACLS', including policies (row security).
 
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
-CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS','SHOWPARTS', 'OWNER_ACL');
+CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS', 'SHOWPARTS', 'ACL_OWNER', 'ACL_DCL','ACL_POLICIES');
 
 -- SELECT * FROM public.pg_get_coldef('sample','orders','id');
 -- DROP FUNCTION public.pg_get_coldef(text,text,text,boolean);
@@ -153,7 +154,7 @@ LANGUAGE plpgsql VOLATILE
 AS
 $$
   DECLARE
-    v_version        text := '1.11 November 24, 2024';
+    v_version        text := '1.12 November 25, 2024';
     v_schema    text := '';
     v_coldef    text := '';
     v_qualified text := '';
@@ -208,7 +209,9 @@ $$
 	  trigcnt          int := 0;
 	  cmtcnt           int := 0;
 	  showpartscnt     int := 0;
-	  ownerinfocnt     int := 0;
+	  aclownercnt      int := 0;
+	  acldclcnt        int := 0;
+	  aclpolicycnt     int := 0;
     pktype           public.tabledefs := 'PKEY_INTERNAL';
     fktype           public.tabledefs := 'FKEYS_INTERNAL';
     trigtype         public.tabledefs := 'NO_TRIGGERS';
@@ -259,8 +262,13 @@ $$
             ELSEIF avarg = 'SHOWPARTS' THEN
                 showpartscnt = showpartscnt + 1;                
             -- Issue#27
-            ELSEIF avarg = 'OWNER_ACL' THEN
-                ownerinfocnt = ownerinfocnt + 1;                                
+            ELSEIF avarg = 'ACL_OWNER' THEN
+                aclownercnt = aclownercnt + 1;                                
+            -- Issue#35
+            ELSEIF avarg = 'ACL_DCL' THEN
+                acldclcnt = acldclcnt + 1;                                                
+            ELSEIF avarg = 'ACL_POLICIES' THEN
+                aclpolicycnt = aclpolicycnt + 1;                     
                 
             END IF;
         END LOOP;
@@ -280,8 +288,15 @@ $$
             RAISE WARNING 'Only one SHOWPARTS option can be provided. You provided %', showpartscnt;
             RETURN '';			
         -- Issue#27
-        ELSEIF ownerinfocnt > 1 THEN 
-            RAISE WARNING 'Only one OWNER_ACL option can be provided. You provided %', ownerinfocnt;
+        ELSEIF aclownercnt > 1 THEN 
+            RAISE WARNING 'Only one ACL_OWNER option can be provided. You provided %', aclownercnt;
+            RETURN '';			
+        -- Issue#35            
+        ELSEIF acldclcnt > 1 THEN 
+            RAISE WARNING 'Only one ACL_DCL option can be provided. You provided %', acldclcnt;
+            RETURN '';			
+        ELSEIF aclpolicycnt > 1 THEN 
+            RAISE WARNING 'Only one ACL_POLICIES option can be provided. You provided %', aclpolicycnt;
             RETURN '';			
             
         END IF;		   		   
@@ -329,8 +344,56 @@ $$
     END IF;
     
     -- Issue#27: set owner ACL info
-    IF ownerinfocnt = 1 THEN
-        v_acl = 'ALTER TABLE IF EXISTS ' || quote_ident(in_schema) || '.' || quote_ident(in_table) || ' OWNER TO ' || v_owner || ';' || E'\n';
+    IF aclownercnt = 1 OR acldclcnt = 1 THEN
+        v_acl = 'ALTER TABLE IF EXISTS ' || quote_ident(in_schema) || '.' || quote_ident(in_table) || ' OWNER TO ' || v_owner || ';' || E'\n' || E'\n';
+    END IF;
+    
+    -- Issue#35: add all other ACL info if directed
+    IF acldclcnt = 1 THEN
+        -- do the revokes first
+        Select 'REVOKE ALL ON TABLE ' || rtg.table_schema || '.' || rtg.table_name || ' FROM ' ||  string_agg(distinct rtg.grantee, ',' ORDER BY rtg.grantee) || ';' INTO v_temp 
+		    FROM information_schema.role_table_grants rtg, pg_class c, pg_namespace n  WHERE n.nspname = quote_ident(in_schema) AND n.oid = c.relnamespace AND c.relkind in ('r','p') AND quote_ident(c.relname) = quote_ident(in_table)
+        AND n.nspname = rtg.table_schema AND c.relname = rtg.table_name AND pg_catalog.pg_get_userbyid(c.relowner) <> rtg.grantee GROUP BY rtg.table_schema, rtg.table_name ORDER BY 1;
+        IF v_temp <> '' THEN
+            v_acl = v_acl || v_temp || E'\n' || E'\n';
+        END IF;
+        
+        -- do the grants
+        FOR v_rec IN
+        WITH ACLs AS (SELECT rtg.grantee as arole,  
+				CASE WHEN string_agg(rtg.privilege_type, ',' ORDER BY rtg.privilege_type) = 'DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE' THEN 'ALL' ELSE string_agg(rtg.privilege_type, ',' ORDER BY rtg.privilege_type) END as privs 
+				FROM information_schema.role_table_grants rtg, pg_class c, pg_namespace n  WHERE n.nspname = quote_ident(in_schema) AND n.oid = c.relnamespace AND c.relkind in ('r','p') AND c.relname = quote_ident(in_table)
+				AND n.nspname = rtg.table_schema AND c.relname = rtg.table_name AND pg_catalog.pg_get_userbyid(c.relowner) <> rtg.grantee AND rtg.grantor <> rtg.grantee GROUP BY 1 ORDER BY 1)
+        SELECT 'GRANT ' || acls.privs || ' ON TABLE ' || quote_ident(in_schema) || '.' || quote_ident(in_table) || ' TO ' || acls.arole || ';' as grants FROM ACLs
+        LOOP
+            v_acl = v_acl || v_rec.grants || E'\n';
+        END LOOP;
+    END IF;
+    
+    IF aclpolicycnt = 1 THEN     
+        v_acl = v_acl || E'\n';
+        
+        -- Enable row security if called for
+        SELECT CASE WHEN p.polpermissive IS TRUE THEN 'true' ELSE 'false' END INTO v_temp 
+        FROM pg_class c, pg_namespace n, pg_policy p WHERE n.nspname = quote_ident(in_schema) AND c.relkind in ('p','r') AND c.relname = quote_ident(in_table) AND c.oid = p.polrelid limit 1;
+        IF v_temp = 'true' THEN
+            v_acl =  v_acl || 'ALTER TABLE ' || quote_ident(in_schema) || '.' || quote_ident(in_table) || ' ENABLE ROW LEVEL SECURITY;' || E'\n';
+        END IF;
+        
+        -- get policies if found
+        -- For other cases to handle see examples in: https://www.postgresql.org/docs/current/ddl-rowsecurity.html
+        FOR v_rec IN
+        SELECT c.oid, n.nspname, c.relname, c.relrowsecurity, p.polname, p.polpermissive, pg_get_expr(p.polqual, p.polrelid) _using, pg_get_expr(p.polwithcheck, p.polrelid) acheck, 
+        CASE WHEN p.polroles = '{0}' THEN '' ELSE pg_catalog.array_to_string(array(select rolname from pg_catalog.pg_roles where oid = any (p.polroles) order by 1),',') END polroles, p.polcmd, 
+        'CREATE POLICY ' ||  p.polname || ' ON ' || n.nspname || '.' || c.relname || CASE WHEN p.polpermissive THEN ' AS PERMISSIVE ' ELSE ' ' END  || 
+        CASE p.polcmd WHEN 'r' THEN 'FOR SELECT' WHEN 'a' THEN 'FOR SELECT' WHEN 'w' THEN 'FOR UPDATE' WHEN 'd' THEN 'FOR DELETE' ELSE 'FOR ALL'    END || ' TO ' || 
+        CASE WHEN p.polroles = '{0}' THEN 'public' ELSE pg_catalog.array_to_string(array(select rolname from pg_catalog.pg_roles where oid = any (p.polroles) order by 1),',') END || 
+        CASE WHEN pg_get_expr(p.polqual, p.polrelid) IS NOT NULL THEN ' USING (' || pg_get_expr(p.polqual, p.polrelid) || ')' ELSE '' END ||
+        CASE WHEN pg_get_expr(p.polwithcheck, p.polrelid) IS NOT NULL THEN ' WITH CHECK (' || pg_get_expr(p.polwithcheck, p.polrelid) || ')' ELSE '' END || ';' as apolicy
+        FROM pg_class c, pg_namespace n, pg_policy p WHERE n.nspname = quote_ident(in_schema) AND c.relkind in ('p','r') AND c.relname = quote_ident(in_table) AND c.oid = p.polrelid ORDER BY apolicy
+        LOOP
+           v_acl  = v_acl || v_rec.apolicy || E'\n'; 
+        END LOOP;
     END IF;
     
     -- -----------------------------------------------------------------------------------
@@ -748,7 +811,7 @@ $$
     -- END IF;
     -- RAISE NOTICE 'ddlsofar3: %', v_table_ddl;
 
-    -- Issue#27: add OWNER ACL info here if directed
+    -- Issue#27: add OWNER ACL OR ALL_ACLS info here if directed
     IF v_acl <> '' THEN
         v_table_ddl := v_table_ddl || v_acl || E'\n';    
     END IF;
