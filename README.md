@@ -37,7 +37,7 @@ This function handles these types of objects:
 * triggers (not trigger functions)
 * Partitioned tables including their partitions (declarative and inheritance-based)
 * Temporary and unlogged tables
-* Access Control Lists (ACLs) information like owner, DCL(grants), and policies (RLS, row level security)
+* Access Control Lists (ACLs) information like owner, DCL (grants), and policies (RLS, row level security)
 
 There are multiple ways to call this function where the differences are mostly related to whether Foreign Keys and/or Triggers are included and what format.  Here is a description of each parameter:
 
