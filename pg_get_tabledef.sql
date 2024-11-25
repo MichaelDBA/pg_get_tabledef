@@ -56,8 +56,8 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2024-11-13   Issue#31: Case-sensitive schemas not handled correctly.
 -- 2024-11-20   Issue#32: Show explicit sequence default output, not SERIAL types to emulate the way PG does it. Also use dt2 (formatted), not dt1
 -- 2024-11-20   Issue#33: Show partition info for parent table if SHOWPARTS enumeration specified
--- 2024-11-24   Issue#27: Add owner info if requested through 'OWNER_ACL' 
--- 2024-11-25   Issue#35: Add option for all other ACLs for a table in addition to the owner, option='ALL_ACLS', including policies (row security).
+-- 2024-11-24   Issue#27: V 2.0 NEW Feature: Add owner info if requested through 'OWNER_ACL' 
+-- 2024-11-25   Issue#35: V 2.0 NEW featrue: Add option for all other ACLs for a table in addition to the owner, option='ALL_ACLS', including policies (row security).
 
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
 CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS', 'SHOWPARTS', 'ACL_OWNER', 'ACL_DCL','ACL_POLICIES');
@@ -154,7 +154,7 @@ LANGUAGE plpgsql VOLATILE
 AS
 $$
   DECLARE
-    v_version        text := '1.12 November 25, 2024';
+    v_version        text := '2.0 November 25, 2024';
     v_schema    text := '';
     v_coldef    text := '';
     v_qualified text := '';
