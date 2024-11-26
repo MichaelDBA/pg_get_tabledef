@@ -58,6 +58,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2024-11-20   Issue#33: Show partition info for parent table if SHOWPARTS enumeration specified
 -- 2024-11-24   Issue#27: V 2.0 NEW Feature: Add owner info if requested through 'OWNER_ACL' 
 -- 2024-11-25   Issue#35: V 2.0 NEW featrue: Add option for all other ACLs for a table in addition to the owner, option='ALL_ACLS', including policies (row security).
+-- 2024-11-26   Issue#36: Fixed issue with PG v9.6 not calling pg_get_coldef() correctly. Also removed attgenerated since not in PG v10 and not used anywhere anyhows
 
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
 CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS', 'SHOWPARTS', 'ACL_OWNER', 'ACL_DCL','ACL_POLICIES');
@@ -82,7 +83,6 @@ v_dt3        text;
 v_nullable   boolean;
 v_position   int; 
 v_identity   text; 
-v_generated  text; 
 v_hasdflt    boolean; 
 v_dfltexpr   text;
 
@@ -113,12 +113,15 @@ BEGIN
 
     -- Issue#32: show integer types, not serial types as output
     SELECT a.atttypid::regtype AS dt1, format_type(a.atttypid, a.atttypmod) as dt2, t.typname as dt3, CASE WHEN not(a.attnotnull) THEN True ELSE False END AS nullable, 
-    a.attnum, a.attidentity, a.attgenerated, a.atthasdef, pg_get_expr(ad.adbin, ad.adrelid) dfltexpr 
-    INTO v_dt1, v_dt2, v_dt3, v_nullable, v_position, v_identity, v_generated, v_hasdflt, v_dfltexpr 
+    -- Issue#36: removed column attgenerated since we do not use it anywhere and not in PGv10
+    -- a.attnum, a.attidentity, a.attgenerated, a.atthasdef, pg_get_expr(ad.adbin, ad.adrelid) dfltexpr 
+    -- INTO v_dt1, v_dt2, v_dt3, v_nullable, v_position, v_identity, v_generated, v_hasdflt, v_dfltexpr 
+    a.attnum, a.attidentity, a.atthasdef, pg_get_expr(ad.adbin, ad.adrelid) dfltexpr 
+    INTO v_dt1, v_dt2, v_dt3, v_nullable, v_position, v_identity, v_hasdflt, v_dfltexpr 
     FROM pg_attribute a JOIN pg_class c ON (a.attrelid = c.oid) JOIN pg_type t ON (a.atttypid = t.oid) LEFT JOIN pg_attrdef ad ON (a.attrelid = ad.adrelid AND a.attnum = ad.adnum) 
     -- WHERE c.relkind in ('r','p') AND a.attnum > 0 AND NOT a.attisdropped AND c.relnamespace::regnamespace::text = in_schema AND c.relname = in_table AND a.attname = in_column;
     WHERE c.relkind in ('r','p') AND a.attnum > 0 AND NOT a.attisdropped AND c.relnamespace::regnamespace::text = quote_ident(in_schema) AND c.relname = in_table AND a.attname = in_column;
-	  -- RAISE NOTICE 'schema=%  table=%  column=%  dt1=%  dt2=%  dt3=%  nullable=%  pos=%  identity=%   generated=%  HasDefault=%  DeftExpr=%', in_schema, in_table, in_column, v_dt1,v_dt2,v_dt3,v_nullable,v_position,v_identity,v_generated,v_hasdflt,v_dfltexpr;
+	  -- RAISE NOTICE 'schema=%  table=%  column=%  dt1=%  dt2=%  dt3=%  nullable=%  pos=%  identity=%   HasDefault=%  DeftExpr=%', in_schema, in_table, in_column, v_dt1,v_dt2,v_dt3,v_nullable,v_position,v_identity,v_hasdflt,v_dfltexpr;
 
 	  --   WHERE c.relkind in ('r','p') AND a.attnum > 0 AND NOT a.attisdropped AND c.relnamespace::regnamespace::text = 'sequences' AND c.relname = 'atable' AND a.attname = 'key';
 		--    dt1   |   dt2   | dt3  | nullable | attnum | attidentity | attgenerated | atthasdef |                      dfltexpr
@@ -154,7 +157,7 @@ LANGUAGE plpgsql VOLATILE
 AS
 $$
   DECLARE
-    v_version        text := '2.0 November 25, 2024';
+    v_version        text := '2.1 November 26, 2024';
     v_schema    text := '';
     v_coldef    text := '';
     v_qualified text := '';
@@ -231,7 +234,9 @@ $$
   BEGIN
     SET client_min_messages = 'notice';
     IF _verbose THEN bVerbose = True; END IF;
-    IF bVerbose THEN RAISE NOTICE 'pg_get_tabledef() version %', v_version; END IF;
+    
+    SELECT setting from pg_settings where name = 'server_version_num' INTO v_pgversion;
+    IF bVerbose THEN RAISE NOTICE 'pg_get_tabledef() version=%    PG version=%', v_version, v_pgversion; END IF;
     
     -- v17 fix: handle case-sensitive  
     -- v_qualified = in_schema || '.' || in_table;
@@ -307,7 +312,7 @@ $$
     -- RAISE NOTICE 'DEBUG: schema qualified:%  before:%', v_schema, in_schema;
 
     -- Issue#27 get owner info too
-    SELECT c.oid, (select setting from pg_settings where name = 'server_version_num'), pg_catalog.pg_get_userbyid(c.relowner) INTO v_table_oid, v_pgversion, v_owner FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+    SELECT c.oid, pg_catalog.pg_get_userbyid(c.relowner) INTO v_table_oid, v_owner FROM pg_catalog.pg_class c LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind in ('r','p') AND c.relname = in_table AND n.nspname = in_schema;
 
    -- set search_path = public before we do anything to force explicit schema qualification but dont forget to set it back before exiting...
@@ -349,6 +354,7 @@ $$
     END IF;
     
     -- Issue#35: add all other ACL info if directed
+    -- only valid in PG 13 and above
     IF acldclcnt = 1 THEN
         -- do the revokes first
         Select 'REVOKE ALL ON TABLE ' || rtg.table_schema || '.' || rtg.table_name || ' FROM ' ||  string_agg(distinct rtg.grantee, ',' ORDER BY rtg.grantee) || ';' INTO v_temp 
@@ -370,7 +376,8 @@ $$
         END LOOP;
     END IF;
     
-    IF aclpolicycnt = 1 THEN     
+    -- Issue#35: RLS/policies only started in PG version 13
+    IF aclpolicycnt = 1 AND v_pgversion > 130000 THEN     
         v_acl = v_acl || E'\n';
         
         -- Enable row security if called for
@@ -521,7 +528,13 @@ $$
          SELECT pg_get_serial_sequence(quote_ident(in_schema) || '.' || quote_ident(in_table), v_colrec.column_name) into v_seqname;         
          IF v_seqname IS NULL THEN v_seqname = ''; END IF;
          SELECT CASE WHEN pg_get_serial_sequence(quote_ident(in_schema) || '.' || quote_ident(in_table), v_colrec.column_name) IS NOT NULL THEN True ELSE False END into bSerial;          
-         SELECT public.pg_get_coldef(in_schema, in_table,v_colrec.column_name) INTO v_coldef;         
+         
+         -- Issue#36: call pg_get_coldef() differently
+         IF v_pgversion < 100000 THEN
+             SELECT public.pg_get_coldef(in_schema, in_table,v_colrec.column_name,true) INTO v_coldef;                  
+         ELSE
+             SELECT public.pg_get_coldef(in_schema, in_table,v_colrec.column_name) INTO v_coldef;         
+         END IF;
 
          IF bVerbose THEN 
              RAISE NOTICE '(col loop) coldef=%  name=%  type=%  udt_name=%  default=%  is_generated=%  gen_expr=%  Serial=%  SeqName=%', 
@@ -552,7 +565,12 @@ $$
              
          ELSEIF v_colrec.udt_name in ('geometry') THEN
              --Issue#30 fix handle geometries separately and use coldef func on it
-             v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name);
+             -- Issue#36: call pg_get_coldef() differently
+						 IF v_pgversion < 100000 THEN
+						     v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name, true);
+						 ELSE
+						     v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name);
+						 END IF;
 
          ELSEIF v_colrec.udt_name in ('box2d', 'box2df', 'box3d', 'geography', 'geometry_dump', 'gidx', 'spheroid', 'valid_detail') THEN         
 		         v_temp = v_colrec.udt_name;
@@ -564,13 +582,27 @@ $$
 
 		     ELSEIF v_colrec.data_type = 'ARRAY' THEN
    		       -- Issue#6 fix: handle arrays
-		         v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name);
+             
+             -- Issue#36: call pg_get_coldef() differently
+						 IF v_pgversion < 100000 THEN
+						     v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name, true);
+						 ELSE
+						     v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name);
+						 END IF;
+   		       
              -- v17 fix: handle case-sensitive for pg_get_serial_sequence that requires SQL Identifier handling
   		       -- WHEN pg_get_serial_sequence(v_qualified, v_colrec.column_name) IS NOT NULL 
 
 		     ELSEIF pg_get_serial_sequence(quote_ident(in_schema) || '.' || quote_ident(in_table), v_colrec.column_name) IS NOT NULL THEN
 		         -- Issue#8 fix: handle serial. Note: NOT NULL is implied so no need to declare it explicitly
-		         v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name);
+
+             -- Issue#36: call pg_get_coldef() differently
+						 IF v_pgversion < 100000 THEN
+						     v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name, true);
+						 ELSE
+						     v_temp = public.pg_get_coldef(in_schema, in_table,v_colrec.column_name);
+						 END IF;
+		         
          --ELSEIF (v_colrec.data_type = 'character varying' or v_colrec.udt_name = 'varchar') AND v_colrec.character_maximum_length IS NOT NULL THEN
 		     ELSE
 		         -- Issue#31 fix
