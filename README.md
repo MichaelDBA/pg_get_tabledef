@@ -20,6 +20,10 @@ Version 2.0 and higher provides Access Control Lists (ACLs) like owner, grants, 
 This function is also used in another github repo for cloning schemas: https://github.com/denishpatel/pg-clone-schema
 <br/>
 
+**Sequences, Serial, and Identity**<br/>
+Serial is treated the same way as sequences are with explicit sequence definitions.  Although you can create a serial column with the **serial** keyword, when you export it through pg_dump, it loses its **serial** definition and looks like a plain sequence.  This is necessary since it cannot be assumed that we can match a serial column to a specific sequence definition name.  This is consistent with how **pg_dump** handles it.
+<br/><br/>
+
 ## Limitations
 * No support for PG Versions 9.5 and older.
 
