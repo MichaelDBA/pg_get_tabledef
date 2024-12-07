@@ -157,7 +157,7 @@ LANGUAGE plpgsql VOLATILE
 AS
 $$
   DECLARE
-    v_version        text := '2.1 November 26, 2024';
+    v_version        text := '2.2 December 7, 2024';
     v_schema    text := '';
     v_coldef    text := '';
     v_qualified text := '';
@@ -642,7 +642,9 @@ $$
          END IF;
 
          -- Handle defaults
-         IF v_colrec.column_default IS NOT null AND NOT bSerial THEN 
+         -- Issue#32 fix
+          -- IF v_colrec.column_default IS NOT null AND NOT bSerial THEN 
+         IF v_colrec.column_default IS NOT null AND NOT bSerial AND v_colrec.column_default NOT ILIKE 'nextval%' THEN          
              -- RAISE NOTICE 'Setting default for column, %', v_colrec.column_name;
              v_temp = v_temp || (' DEFAULT ' || v_colrec.column_default);
          END IF;
