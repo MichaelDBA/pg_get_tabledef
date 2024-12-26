@@ -160,7 +160,7 @@ LANGUAGE plpgsql VOLATILE
 AS
 $$
   DECLARE
-    v_version        text := '2.3 December 26, 2024  GNU General Public License 3.0'
+    v_version        text := '2.3 December 26, 2024  GNU General Public License 3.0';
     v_schema    text := '';
     v_coldef    text := '';
     v_qualified text := '';
