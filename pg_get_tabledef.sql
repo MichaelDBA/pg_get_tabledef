@@ -2,7 +2,7 @@
 COPYRIGHT NOTICE FOLLOWS.  DO NOT REMOVE
 Copyright (c) 2021-2025 SQLEXEC LLC
 
-			GNU General Public License v3.0
+				GNU General Public License v3.0
 Permission to use, copy, modify, and distribute this software and its documentation 
 for any purpose, without fee, and without a written agreement is hereby granted, 
 provided that the above copyright notice and this paragraph and the following two paragraphs appear in all copies.
@@ -61,6 +61,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2024-11-25   Issue#35: V 2.0 NEW featrue: Add option for all other ACLs for a table in addition to the owner, option='ALL_ACLS', including policies (row security).
 -- 2024-11-26   Issue#36: Fixed issue with PG v9.6 not calling pg_get_coldef() correctly. Also removed attgenerated since not in PG v10 and not used anywhere anyhows
 -- 2024-12-15   Issue#37: Fixed issue with case-sensitive user-defined types are not being enclosed with double-quotes.
+-- 2024-12-26   --------: Updated License info for GNU
 
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
 CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS', 'SHOWPARTS', 'ACL_OWNER', 'ACL_DCL','ACL_POLICIES');
@@ -159,7 +160,7 @@ LANGUAGE plpgsql VOLATILE
 AS
 $$
   DECLARE
-    v_version        text := '2.3 December 15, 2024  GNU License 3.0'
+    v_version        text := '2.3 December 15, 2024  GNU General Public License 3.0'
     v_schema    text := '';
     v_coldef    text := '';
     v_qualified text := '';
