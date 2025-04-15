@@ -2,20 +2,25 @@
 COPYRIGHT NOTICE FOLLOWS.  DO NOT REMOVE
 Copyright (c) 2021-2025 SQLEXEC LLC
 
-				GNU General Public License v3.0
-Permission to use, copy, modify, and distribute this software and its documentation 
-for any purpose, without fee, and without a written agreement is hereby granted, 
-provided that the above copyright notice and this paragraph and the following two paragraphs appear in all copies.
+MIT License:
 
-IN NO EVENT SHALL SQLEXEC LLC BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT,INDIRECT SPECIAL, 
-INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS, ARISING OUT OF THE USE 
-OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF SQLEXEC LLC HAS BEEN ADVISED OF THE 
-POSSIBILITY OF SUCH DAMAGE.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-SQLEXEC LLC SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT LIMITED TO, 
-THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. 
-THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, AND SQLEXEC LLC HAS 
-NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ************************************************************************************ */
 
@@ -62,6 +67,7 @@ NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFI
 -- 2024-11-26   Issue#36: Fixed issue with PG v9.6 not calling pg_get_coldef() correctly. Also removed attgenerated since not in PG v10 and not used anywhere anyhows
 -- 2024-12-15   Issue#37: Fixed issue with case-sensitive user-defined types are not being enclosed with double-quotes.
 -- 2024-12-26   --------: Updated License info for GNU
+-- 2025-04-15   Issue#38: Updated License info to specify MIT instead of GNU since MIT is more permissive
 
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
 CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS', 'SHOWPARTS', 'ACL_OWNER', 'ACL_DCL','ACL_POLICIES');
