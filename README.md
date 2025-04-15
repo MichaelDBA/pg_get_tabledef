@@ -1,9 +1,9 @@
 # pg_get_tabledef
 **pg_get_tabledef** is a PostgreSQL PL/PGSQL function that generates table DDL for the given schema/table.
 
-(c) 2021-2024 SQLEXEC LLC
+(c) 2021-2025 SQLEXEC LLC
 <br/>
-GNU V3 and MIT licenses are conveyed accordingly.
+MIT license is conveyed accordingly.
 <br/>
 Bugs can be reported by creating an issue here.
 <br/>
