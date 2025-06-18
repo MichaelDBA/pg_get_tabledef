@@ -68,6 +68,7 @@ SOFTWARE.
 -- 2024-12-15   Issue#37: Fixed issue with case-sensitive user-defined types are not being enclosed with double-quotes.
 -- 2024-12-26   --------: Updated License info for GNU
 -- 2025-04-15   Issue#38: Updated License info to specify MIT instead of GNU since MIT is more permissive
+-- 2025-06-18   Issue#39: Handle tablespace location where schema is case-sensitive. Also, discovered that tablespace not being added to PG 9.6 versions.
 
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
 CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS', 'SHOWPARTS', 'ACL_OWNER', 'ACL_DCL','ACL_POLICIES');
@@ -848,6 +849,11 @@ $$
         -- end the create definition
         v_table_ddl := v_table_ddl || ') ' || v_tablespace || ';' || E'\n';    
       END IF;  
+
+    -- Issue#39: don't forget the tablespace!      
+    ELSEIF v_pgversion < 100000 THEN
+        -- end the create definition
+        v_table_ddl := v_table_ddl || ') ' || v_tablespace || ';' || E'\n';            
     END IF;
 
     IF bVerbose THEN RAISE NOTICE '(5)tabledef so far: %', v_table_ddl; END IF;
@@ -896,16 +902,20 @@ $$
       v_indexrec.indexdef := REPLACE(v_indexrec.indexdef, 'CREATE INDEX', 'CREATE INDEX IF NOT EXISTS');
       -- Fix Issue#26: do it for unique/primary key indexes as well
       v_indexrec.indexdef := REPLACE(v_indexrec.indexdef, 'CREATE UNIQUE INDEX', 'CREATE UNIQUE INDEX IF NOT EXISTS');
-      -- RAISE NOTICE 'DEBUG8: adding index, %', v_indexrec.indexname;
-      
+            
       -- NOTE:  cannot specify default tablespace for partitioned relations
       IF v_partition_key IS NOT NULL AND v_partition_key <> '' THEN
           v_table_ddl := v_table_ddl || v_indexrec.indexdef || ';' || E'\n';
       ELSE
           -- Issue#25: see if partial index or not
+          -- Issue#39: handle case-sensitive schemas
+					-- select CASE WHEN i.indpred IS NOT NULL THEN True ELSE False END INTO v_partial 
+					-- FROM pg_index i JOIN pg_class c1 ON (i.indexrelid = c1.oid) JOIN pg_class c2 ON (i.indrelid = c2.oid) 
+					-- WHERE c1.relnamespace::regnamespace::text = in_schema AND c2.relnamespace::regnamespace::text = in_schema AND c2.relname = in_table AND c1.relname = v_indexrec.indexname; 
 					select CASE WHEN i.indpred IS NOT NULL THEN True ELSE False END INTO v_partial 
 					FROM pg_index i JOIN pg_class c1 ON (i.indexrelid = c1.oid) JOIN pg_class c2 ON (i.indrelid = c2.oid) 
-					WHERE c1.relnamespace::regnamespace::text = in_schema AND c2.relnamespace::regnamespace::text = in_schema AND c2.relname = in_table AND c1.relname = v_indexrec.indexname; 
+					WHERE c1.relnamespace::regnamespace::text = quote_ident(in_schema) AND c2.relnamespace::regnamespace::text = c1.relnamespace::regnamespace::text AND c2.relname = in_table AND c1.relname = v_indexrec.indexname; 
+					
           IF v_partial THEN
               -- Put tablespace def before WHERE CLAUSE
               v_temp = v_indexrec.indexdef;
