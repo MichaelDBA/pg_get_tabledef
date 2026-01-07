@@ -1,6 +1,6 @@
 /* ********************************************************************************
 COPYRIGHT NOTICE FOLLOWS.  DO NOT REMOVE
-Copyright (c) 2021-2025 SQLEXEC LLC
+Copyright (c) 2021-2026 SQLEXEC LLC
 
 MIT License:
 
@@ -1043,3 +1043,4 @@ $$
 
   END;
 $$;
+
