@@ -61,7 +61,7 @@ With respect to the Primary and Foreign Key enumerations:
 <br/>
 INTERNAL - part of table create statement
 <br/>
-EXTERNAL - ALTER TABLE ADD PRIMAMRY KEY/FOREIGN KEY statement
+EXTERNAL - ALTER TABLE ADD PRIMARY KEY/FOREIGN KEY statement
 <br/><br/>
 With regard to ACL parameters (new in version 2), ACL_DCL shows GRANT statements in addition to the ALTER TABLE statement for setting the owner which can be done separately as a single statement with ACL_OWNER.  To  include all ACLs, you must specify ACL_DCL and ACL_POLICIES.
 <br/><br/>
