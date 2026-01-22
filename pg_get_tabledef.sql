@@ -71,6 +71,11 @@ SOFTWARE.
 -- 2025-06-18   Issue#39: Handle tablespace location where schema is case-sensitive. Also, discovered that tablespace not being added to PG 9.6 versions.
 -- 2025-07-30   Issue#40: Handle case where a table has a REPLICA IDENTITY set on it, but it is not exported as an ALTER TABLE statement.
 
+-- to drop this stuff cleanly, uncomment and execute the following:
+-- DROP FUNCTION IF EXISTS public.pg_get_tabledef(character varying,character varying,boolean,tabledefs[]);
+-- DROP FUNCTION IF EXISTS public.pg_get_coldef(text,text,text,boolean);
+-- DROP TYPE IF EXISTS public.tabledefs CASCADE;
+
 DROP TYPE IF EXISTS public.tabledefs CASCADE;
 CREATE TYPE public.tabledefs AS ENUM ('PKEY_INTERNAL','PKEY_EXTERNAL','FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'FKEYS_NONE', 'INCLUDE_TRIGGERS', 'NO_TRIGGERS', 'SHOWPARTS', 'ACL_OWNER', 'ACL_DCL','ACL_POLICIES');
 
@@ -1043,4 +1048,5 @@ $$
 
   END;
 $$;
+
 
