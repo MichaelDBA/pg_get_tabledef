@@ -31,7 +31,7 @@ Serial is treated the same way as sequences are with explicit sequence definitio
 This function handles these types of objects:
 * column defaults
 * user-defined data types
-* arrays
+* arrays, vectors
 * SET and WITH clause storage parameters
 * check constraints
 * primary and foreign keys
