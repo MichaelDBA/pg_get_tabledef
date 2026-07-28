@@ -70,7 +70,7 @@ SOFTWARE.
 -- 2025-04-15   Issue#38: Updated License info to specify MIT instead of GNU since MIT is more permissive
 -- 2025-06-18   Issue#39: Handle tablespace location where schema is case-sensitive. Also, discovered that tablespace not being added to PG 9.6 versions.
 -- 2025-07-30   Issue#40: Handle case where a table has a REPLICA IDENTITY set on it, but it is not exported as an ALTER TABLE statement.
--- 2026-07-28   Issue#41: Handle vector data types
+-- 2026-07-28   Issue#41: Handle pgvector vector(n) column definitions by preserving dimensions (typmods).
 
 -- to drop this stuff cleanly, uncomment and execute the following:
 -- DROP FUNCTION IF EXISTS public.pg_get_tabledef(character varying,character varying,boolean,tabledefs[]);
