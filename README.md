@@ -48,7 +48,7 @@ There are multiple ways to call this function where the differences are mostly r
 <pre>in_schema    TEXT  Required: schema name</pre>
 <pre>in_table     TEXT  Required: table name</pre>
 <pre>verbose      BOOL  Required:                               useful for debugging when set to True</pre>
-<pre>compact      BOOL  Required:                               table definition is output as one line if true
+<pre>compact      BOOL  Required:                               table definition is output as one line if true</pre>
 <pre>FKEY         ENUM  Optional: Default=FKEYS_INTERNAL        Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'</pre>
 <pre>TRIG         ENUM  Optional: Default=NO_TRIGGERS           Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'</pre>
 <pre>PKEY         ENUM  Optional: Default=internal def          Enumeration: 'PKEY_EXTERNAL'</pre>
