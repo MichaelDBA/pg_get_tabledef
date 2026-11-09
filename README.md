@@ -47,7 +47,8 @@ There are multiple ways to call this function where the differences are mostly r
 
 <pre>in_schema    TEXT  Required: schema name</pre>
 <pre>in_table     TEXT  Required: table name</pre>
-<pre>verbose      BOOL  Required: Default=false,                useful for debugging when set to True</pre>
+<pre>verbose      BOOL  Required:                               useful for debugging when set to True</pre>
+<pre>compact      BOOL  Required:                               table definition is output as one line if true
 <pre>FKEY         ENUM  Optional: Default=FKEYS_INTERNAL        Enumeration: 'FKEYS_INTERNAL', 'FKEYS_EXTERNAL', 'FKEYS_COMMENTED', 'FKEYS_NONE'</pre>
 <pre>TRIG         ENUM  Optional: Default=NO_TRIGGERS           Enumeration: 'INCLUDE_TRIGGERS', 'NO_TRIGGERS'</pre>
 <pre>PKEY         ENUM  Optional: Default=internal def          Enumeration: 'PKEY_EXTERNAL'</pre>
@@ -66,19 +67,19 @@ EXTERNAL - ALTER TABLE ADD PRIMARY KEY/FOREIGN KEY statement
 With regard to ACL parameters (new in version 2), ACL_DCL shows GRANT statements in addition to the ALTER TABLE statement for setting the owner which can be done separately as a single statement with ACL_OWNER.  To  include all ACLs, you must specify ACL_DCL and ACL_POLICIES.
 <br/><br/>
 ## Examples
-select * from public.pg_get_tabledef('myschema','mytable', false);
+select * from public.pg_get_tabledef('myschema','mytable', false, false);
 <br/><br/>
-select * from public.pg_get_tabledef('myschema','mytable', false, 'ACL_DCL');
+select * from public.pg_get_tabledef('myschema','mytable', false, false, 'ACL_DCL');
 <br/><br/>
-select * from public.pg_get_tabledef('myschema','mytable', false, 'PKEY_EXTERNAL');
+select * from public.pg_get_tabledef('myschema','mytable', false, false, 'PKEY_EXTERNAL');
 <br/><br/>
-select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL');
+select * from public.pg_get_tabledef('myschema','mytable', false, false, 'FKEYS_EXTERNAL');
 <br/><br/>
-select * from public.pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL', 'INCLUDE_TRIGGERS');
+select * from public.pg_get_tabledef('myschema','mytable', false, false, 'FKEYS_EXTERNAL', 'INCLUDE_TRIGGERS');
 <br/><br/>
-select * from public.pg_get_tabledef('myschema','mytable', false, 'PKEY_EXTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'INCLUDE_TRIGGERS');
+select * from public.pg_get_tabledef('myschema','mytable', false, false, 'PKEY_EXTERNAL', 'FKEYS_EXTERNAL', 'COMMENTS', 'INCLUDE_TRIGGERS');
 <br/><br/>
-psql clone_testing -c "select * from pg_get_tabledef('sample','emp',false,'COMMENTS','INCLUDE_TRIGGERS')"
+psql clone_testing -c "select * from pg_get_tabledef('sample','emp',false,false,'COMMENTS','INCLUDE_TRIGGERS')"
 ![image](https://github.com/MichaelDBA/pg_get_tabledef/assets/12436545/45e5bff3-e6a5-4893-80f5-1bdae25ebd28)
 
 ## Compare to pg_dump
@@ -92,7 +93,7 @@ You can avoid column headers and plus signs at the end of each line by specifyin
 
 psql mydatabase  **-At**
 <br/><br/>
-psql mydatabase  **-At** -c "select pg_get_tabledef('myschema','mytable', false, 'FKEYS_EXTERNAL')"
+psql mydatabase  **-At** -c "select pg_get_tabledef('myschema','mytable', false, false, 'FKEYS_EXTERNAL')"
 <br/><br/>
 or within a psql sesssion: **\pset format unaligned**
 
