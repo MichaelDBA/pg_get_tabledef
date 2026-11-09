@@ -490,11 +490,15 @@ $$
         IF v_cnt1 > 0 OR v_cnt2 > 0 THEN
           -- Issue#31 fix
           -- v_table_ddl := 'CREATE TABLE ' || in_schema || '."' || in_table || '"( '|| E'\n';        
-          v_table_ddl := 'CREATE TABLE ' || v_schema || '."' || in_table || '"( '|| E'\n';        
+          -- Issue#43: compact logic
+          -- v_table_ddl := 'CREATE TABLE ' || v_schema || '."' || in_table || '"( '|| E'\n';      
+          v_table_ddl := 'CREATE TABLE ' || v_schema || '."' || in_table || '"( '|| CASE WHEN bCompact THEN '' ELSE E'\n' END;
         ELSE
           -- Issue#31 fix
-          -- v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || '( '|| E'\n';                
-          v_table_ddl := 'CREATE TABLE ' || v_schema || '.' || in_table || '( '|| E'\n';                
+          -- v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || '( '|| E'\n';    
+          -- Issue#43: compact logic
+          -- v_table_ddl := 'CREATE TABLE ' || v_schema || '.' || in_table || '( '|| E'\n';     
+          v_table_ddl := 'CREATE TABLE ' || v_schema || '.' || in_table || '( '|| CASE WHEN bCompact THEN '' ELSE E'\n' END;
         END IF;
 
         -- Jump to constraints section to add the check constraints
@@ -888,7 +892,9 @@ $$
       -- Issue#11: handle parent schema
       -- v_table_ddl := v_table_ddl || ') INHERITS (' || in_schema || '.' || v_parent || ') ' || E'\n' || v_relopts || ' ' || v_tablespace || ';' || E'\n';
       IF v_parent_schema = '' OR v_parent_schema IS NULL THEN v_parent_schema = in_schema; END IF;
-      v_table_ddl := v_table_ddl || ') INHERITS (' || v_parent_schema || '.' || v_parent || ') ' || v_relopts || ' ' || v_tablespace || ';' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
+      -- Issue#43: compact logic
+      -- v_table_ddl := v_table_ddl || ') INHERITS (' || v_parent_schema || '.' || v_parent || ') ' || v_relopts || ' ' || v_tablespace || ';' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
+      v_table_ddl := v_table_ddl || ') INHERITS (' || v_parent_schema || '.' || v_parent || ') ' || v_relopts || ' ' || v_tablespace || ';' || E'\n';
     END IF;
 
     IF v_pgversion >= 100000 AND NOT bPartition and NOT bInheritance THEN
