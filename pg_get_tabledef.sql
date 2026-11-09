@@ -71,6 +71,7 @@ SOFTWARE.
 -- 2025-06-18   Issue#39: Handle tablespace location where schema is case-sensitive. Also, discovered that tablespace not being added to PG 9.6 versions.
 -- 2025-07-30   Issue#40: Handle case where a table has a REPLICA IDENTITY set on it, but it is not exported as an ALTER TABLE statement.
 -- 2026-07-28   Issue#41: Handle pgvector vector(n) column definitions by preserving dimensions (typmods).
+-- 2026-11-09   Issue#43: New option to compact the output into one line for compatibility with clone_schema in DDLONLY mode.
 
 -- to drop this stuff cleanly, uncomment and execute the following:
 -- DROP FUNCTION IF EXISTS public.pg_get_tabledef(character varying,character varying,boolean,tabledefs[]);
@@ -163,11 +164,14 @@ END;
 $$;
 
 -- SELECT * FROM public.pg_get_tabledef('sample', 'address', false);
-DROP FUNCTION IF EXISTS public.pg_get_tabledef(character varying,character varying,boolean,tabledefs[]);
+-- SELECT * FROM public.pg_get_tabledef('sample', 'address', false, false);
+-- DROP FUNCTION IF EXISTS public.pg_get_tabledef(character varying,character varying,boolean,tabledefs[]);
+DROP FUNCTION IF EXISTS public.pg_get_tabledef(character varying,character varying,boolean,boolean,tabledefs[]);
 CREATE OR REPLACE FUNCTION public.pg_get_tabledef(
   in_schema varchar,
   in_table varchar,
-  _verbose boolean,
+  bVerbose boolean,
+  bCompact boolean,
   VARIADIC arr public.tabledefs[] DEFAULT '{}':: public.tabledefs[]
 )
 RETURNS text
@@ -175,7 +179,7 @@ LANGUAGE plpgsql VOLATILE
 AS
 $$
   DECLARE
-    v_version        text := '2.5 July 28, 2026  GNU General Public License 3.0';
+    v_version        text := '2.6 November 09, 2026  GNU General Public License 3.0';
     v_schema    text := '';
     v_coldef    text := '';
     v_qualified text := '';
@@ -211,39 +215,39 @@ $$
     constraintarr text[] := '{}';
     constraintelement text;
     bSkip boolean;
-	  bVerbose boolean := False;
-	  v_cnt1   integer;
-	  v_cnt2   integer;
-	  search_path_old text := '';
-	  search_path_new text := '';
-	  v_partial    boolean;
-	  v_pos        integer;
-	  v_partinfo   text := '';
-	  v_oid        oid;
-	  v_partkeydef text := '';
-	  v_owner      text := '';
-	  v_acl        text := '';
-	  v_repl_ident text := '';
-	  v_relreplident                text := '';
-	  v_indisreplident              text := '';
-	  v_replica_identity_setting    text := '';
-	  v_replica_identity_index_name text:= '';
+
+    v_cnt1   integer;
+    v_cnt2   integer;
+    search_path_old text := '';
+    search_path_new text := '';
+    v_partial    boolean;
+    v_pos        integer;
+    v_partinfo   text := '';
+    v_oid        oid;
+    v_partkeydef text := '';
+    v_owner      text := '';
+    v_acl        text := '';
+    v_repl_ident text := '';
+    v_relreplident                text := '';
+    v_indisreplident              text := '';
+    v_replica_identity_setting    text := '';
+    v_replica_identity_index_name text:= '';
 
     -- assume defaults for ENUMs at the getgo	
-  	pkcnt            int := 0;
-  	fkcnt            int := 0;
-	  trigcnt          int := 0;
-	  cmtcnt           int := 0;
-	  showpartscnt     int := 0;
-	  aclownercnt      int := 0;
-	  acldclcnt        int := 0;
-	  aclpolicycnt     int := 0;
+    pkcnt            int := 0;
+    fkcnt            int := 0;
+    trigcnt          int := 0;
+    cmtcnt           int := 0;
+    showpartscnt     int := 0;
+    aclownercnt      int := 0;
+    acldclcnt        int := 0;
+    aclpolicycnt     int := 0;
     pktype           public.tabledefs := 'PKEY_INTERNAL';
     fktype           public.tabledefs := 'FKEYS_INTERNAL';
     trigtype         public.tabledefs := 'NO_TRIGGERS';
     arglen           integer;
-  	vargs            text;
-	  avarg            public.tabledefs;
+    vargs            text;
+    avarg            public.tabledefs;
 
     -- exception variables
     v_ret            text;
@@ -256,7 +260,6 @@ $$
 	
   BEGIN
     SET client_min_messages = 'notice';
-    IF _verbose THEN bVerbose = True; END IF;
     
     SELECT setting from pg_settings where name = 'server_version_num' INTO v_pgversion;
     IF bVerbose THEN RAISE NOTICE 'pg_get_tabledef() version=%    PG version=%', v_version, v_pgversion; END IF;
@@ -264,16 +267,16 @@ $$
     -- v17 fix: handle case-sensitive  
     -- v_qualified = in_schema || '.' || in_table;
 	
-    arglen := array_length($4, 1);
+    arglen := array_length($5, 1);
     IF arglen IS NULL THEN
         -- nothing to do, so assume defaults
         NULL;
     ELSE
         -- loop thru args
-        -- IF 'NO_TRIGGERS' = ANY ($4)
-        -- select array_to_string($4, ',', '***') INTO vargs;
-        IF bVerbose THEN RAISE NOTICE 'arguments=%', $4; END IF;
-        FOREACH avarg IN ARRAY $4 LOOP
+        -- IF 'NO_TRIGGERS' = ANY ($5)
+        -- select array_to_string($5, ',', '***') INTO vargs;
+        IF bVerbose THEN RAISE NOTICE 'arguments=%', $5; END IF;
+        FOREACH avarg IN ARRAY $5 LOOP
             IF bVerbose THEN RAISE NOTICE 'arg=%', avarg; END IF;
             IF avarg = 'FKEYS_INTERNAL' OR avarg = 'FKEYS_EXTERNAL' OR avarg = 'FKEYS_NONE' THEN
                 fkcnt = fkcnt + 1;
@@ -501,21 +504,22 @@ $$
           IF v_cnt1 > 0 OR v_cnt2 > 0 THEN
             -- Issue#31 fix
             -- v_table_ddl := 'CREATE TABLE ' || in_schema || '."' || in_table || '" PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || E'\n';
-            v_table_ddl := 'CREATE TABLE ' || v_schema || '."' || in_table || '" PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || E'\n';
+            -- issue#143: '; ' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
+            v_table_ddl := 'CREATE TABLE ' || v_schema || '."' || in_table || '" PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
 				  ELSE
 				    -- Issue#31 fix
-				    -- v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || E'\n';
-				    v_table_ddl := 'CREATE TABLE ' || v_schema || '.' || in_table || ' PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || E'\n';
+				    -- v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
+				    v_table_ddl := 'CREATE TABLE ' || v_schema || '.' || in_table || ' PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || v_relopts || ' ' || v_tablespace || '; ' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
 				  END IF;
         ELSE
           IF v_cnt1 > 0 OR v_cnt2 > 0 THEN
             -- Issue#31 fix
-            -- v_table_ddl := 'CREATE TABLE ' || in_schema || '."' || in_table || '" PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || E'\n';
-            v_table_ddl := 'CREATE TABLE ' || v_schema || '."' || in_table || '" PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || E'\n';
+            -- v_table_ddl := 'CREATE TABLE ' || in_schema || '."' || in_table || '" PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
+            v_table_ddl := 'CREATE TABLE ' || v_schema || '."' || in_table || '" PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
 				  ELSE
 				    -- Issue#31 fix
-				    -- v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || E'\n';
-				    v_table_ddl := 'CREATE TABLE ' || v_schema || '.' || in_table || ' PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || E'\n';
+				    -- v_table_ddl := 'CREATE TABLE ' || in_schema || '.' || in_table || ' PARTITION OF ' || in_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
+				    v_table_ddl := 'CREATE TABLE ' || v_schema || '.' || in_table || ' PARTITION OF ' || v_schema || '.' || v_parent || ' ' || v_partbound || ' ' || v_tablespace || '; ' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
 				  END IF;
         END IF;
         -- Jump to constraints and index section to add the check constraints and indexes and perhaps FKeys
@@ -545,11 +549,15 @@ $$
       IF v_cnt1 > 0 THEN
         -- Issue#31 fix
         -- v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || in_schema || '."' || in_table || '" (' || E'\n';
-        v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || v_schema || '."' || in_table || '" (' || E'\n';
+        -- Issue#43
+        -- v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || v_schema || '."' || in_table || '" (' || E'\n';
+        v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || v_schema || '."' || in_table || '" (' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
       ELSE
         -- Issue#31 fix
         -- v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || in_schema || '.' || in_table || ' (' || E'\n';
-        v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || v_schema || '.' || in_table || ' (' || E'\n';
+        -- Issue#43
+        -- v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || v_schema || '.' || in_table || ' (' || E'\n';
+        v_table_ddl := 'CREATE ' || v_temp || ' TABLE ' || v_schema || '.' || in_table || ' (' || CASE WHEN bCompact THEN '' ELSE E'\n' END;        
       END IF;
     END IF;
     -- RAISE NOTICE 'DEBUG2: tabledef so far: %', v_table_ddl;    
@@ -703,10 +711,13 @@ $$
              v_temp = v_temp || (' DEFAULT ' || v_colrec.column_default);
          END IF;
          
-         v_temp = v_temp || ',' || E'\n';
-         -- RAISE NOTICE 'column def2=%', v_temp;
+         IF bCompact THEN
+	     v_temp = v_temp || ', ';
+	 ELSE
+	     v_temp = v_temp || ',' || E'\n';
+	 END IF;
+	 -- RAISE NOTICE 'column def2=%', v_temp;
          v_table_ddl := v_table_ddl || v_temp;
-         -- RAISE NOTICE 'tabledef=%', v_table_ddl;
          
          IF bVerbose THEN RAISE NOTICE 'tabledef: %', v_table_ddl; END IF;
       END LOOP;
@@ -739,7 +750,7 @@ $$
                   || 'CONSTRAINT' || ' '
                   || v_constraint_name || ' '
                   || v_constraint_def
-                  || ',' || E'\n';
+                  || CASE WHEN bCompact THEN ', ' ELSE ',' || E'\n' END;
             ELSE
               -- Issue#16 handle external PG def
               SELECT 'ALTER TABLE ONLY ' || in_schema || '.' || c.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_pkey_def 
@@ -760,7 +771,7 @@ $$
                   || 'CONSTRAINT' || ' '
                   || v_constraint_name || ' '
                   || v_constraint_def
-                  || ',' || E'\n';                
+                  || CASE WHEN bCompact THEN ', ' ELSE ',' || E'\n' END;
             ELSE
                 -- external def
                 SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_fkey_def 
@@ -773,7 +784,7 @@ $$
               || 'CONSTRAINT' || ' '
               || v_constraint_name || ' '
               || v_constraint_def
-              || ',' || E'\n';            
+              || CASE WHEN bCompact THEN ', ' ELSE ',' || E'\n' END;
         END IF;
         if bVerbose THEN RAISE NOTICE 'constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
         constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
@@ -809,7 +820,7 @@ $$
                   || 'CONSTRAINT' || ' '
                   || v_constraint_name || ' '
                   || v_constraint_def
-                  || ',' || E'\n';
+                  || CASE WHEN bCompact THEN ', ' ELSE ',' || E'\n' END;
             ELSE
               -- Issue#16 handle external PG def
               SELECT 'ALTER TABLE ONLY ' || in_schema || '.' || c.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_pkey_def 
@@ -830,7 +841,7 @@ $$
                   || 'CONSTRAINT' || ' '
                   || v_constraint_name || ' '
                   || v_constraint_def
-                  || ',' || E'\n';                
+                  || CASE WHEN bCompact THEN ', ' ELSE ',' || E'\n' END;
             ELSE
                 -- external def
                 SELECT 'ALTER TABLE ONLY ' || n.nspname || '.' || c2.relname || ' ADD CONSTRAINT ' || r.conname || ' ' || pg_catalog.pg_get_constraintdef(r.oid, true) || ';' INTO v_fkey_def 
@@ -844,7 +855,7 @@ $$
               || 'CONSTRAINT' || ' '
               || v_constraint_name || ' '
               || v_constraint_def
-              || ',' || E'\n';            
+              || CASE WHEN bCompact THEN ', ' ELSE ',' || E'\n' END;
         END IF;
         if bVerbose THEN RAISE NOTICE 'constraint name=% constraint_def=%', v_constraint_name,v_constraint_def; END IF;
         constraintarr := constraintarr || v_constraintrec.constraint_name:: text;
@@ -852,12 +863,19 @@ $$
        END LOOP;
     END IF;      
 	
-    -- drop the last comma before ending the create statement, which should be right before the carriage return character
+    -- drop the last comma before ending the create statement
     -- Issue#24: make sure the comma is there before removing it
-    select substring(v_table_ddl, length(v_table_ddl) - 1, 1) INTO v_temp;
-    IF v_temp = ',' THEN
-        v_table_ddl = substr(v_table_ddl, 0, length(v_table_ddl) - 1) || E'\n';
+    IF bCompact THEN
+        IF right(v_table_ddl, 2) = ', ' THEN
+            v_table_ddl := left(v_table_ddl, length(v_table_ddl) - 2);
+        END IF;
+    ELSE
+        SELECT substring(v_table_ddl, length(v_table_ddl) - 1, 1) INTO v_temp;
+        IF v_temp = ',' THEN
+            v_table_ddl := substr(v_table_ddl, 0, length(v_table_ddl) - 1) || E'\n';
+        END IF;
     END IF;
+
     IF bVerbose THEN RAISE NOTICE '(3)tabledef so far: %', trim(v_table_ddl); END IF;
 
     -- ---------------------------------------------------------------------------
@@ -870,7 +888,7 @@ $$
       -- Issue#11: handle parent schema
       -- v_table_ddl := v_table_ddl || ') INHERITS (' || in_schema || '.' || v_parent || ') ' || E'\n' || v_relopts || ' ' || v_tablespace || ';' || E'\n';
       IF v_parent_schema = '' OR v_parent_schema IS NULL THEN v_parent_schema = in_schema; END IF;
-      v_table_ddl := v_table_ddl || ') INHERITS (' || v_parent_schema || '.' || v_parent || ') ' || E'\n' || v_relopts || ' ' || v_tablespace || ';' || E'\n';
+      v_table_ddl := v_table_ddl || ') INHERITS (' || v_parent_schema || '.' || v_parent || ') ' || v_relopts || ' ' || v_tablespace || ';' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
     END IF;
 
     IF v_pgversion >= 100000 AND NOT bPartition and NOT bInheritance THEN
@@ -882,12 +900,12 @@ $$
         -- add partition clause
         -- NOTE:  cannot specify default tablespace for partitioned relations
         -- v_table_ddl := v_table_ddl || ') PARTITION BY ' || v_partition_key || ' ' || v_tablespace || ';' || E'\n';  
-        v_table_ddl := v_table_ddl || ') PARTITION BY ' || v_partition_key || ';' || E'\n';  
+        v_table_ddl := v_table_ddl || ') PARTITION BY ' || v_partition_key || ';' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
       ELSEIF v_relopts <> '' THEN
-        v_table_ddl := v_table_ddl || ') ' || v_relopts || ' ' || v_tablespace || ';' || E'\n';  
+        v_table_ddl := v_table_ddl || ') ' || v_relopts || ' ' || v_tablespace || ';' || CASE WHEN bCompact THEN '' ELSE E'\n' END;
       ELSE
         -- end the create definition
-        v_table_ddl := v_table_ddl || ') ' || v_tablespace || ';' || E'\n';    
+        v_table_ddl := v_table_ddl || ') ' || v_tablespace || ';' || E'\n';
       END IF;  
 
     -- Issue#39: don't forget the tablespace!      
@@ -1040,6 +1058,9 @@ $$
       IF bVerbose THEN RAISE NOTICE 'SearchPath Cleanup: resetting searchpath=%', search_path_old; END IF;
       EXECUTE 'SET search_path = ' || search_path_old;
     END IF;
+
+    -- remove blank lines from the output
+    v_table_ddl := regexp_replace(v_table_ddl, E'\n[ \t]*\n+', E'\n', 'g');
 
     RETURN v_table_ddl;
 	
